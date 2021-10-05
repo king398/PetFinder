@@ -42,7 +42,6 @@
 # In[1]:
 
 
-get_ipython().system('nvidia-smi')
 
 
 # # Installations
@@ -50,10 +49,7 @@ get_ipython().system('nvidia-smi')
 # In[2]:
 
 
-get_ipython().system('pip install -qq timm')
-get_ipython().system('pip install -qq albumentations == 1.0.3')
-get_ipython().system('pip install -qq grad-cam')
-get_ipython().system('pip install -qq ttach')
+
 
 
 # # Imports
@@ -85,7 +81,6 @@ pd.set_option('display.max_columns', None)
 
 # Visialisation
 import matplotlib.pyplot as plt
-get_ipython().run_line_magic('matplotlib', 'inline')
 
 # Image Aug
 import albumentations
@@ -93,7 +88,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 
 # Deep Learning
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, OneCycleLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts,  CosineAnnealingLR
 import torch
 import torchvision
 import timm
@@ -442,14 +437,6 @@ def get_scheduler(optimizer, scheduler_params=params):
 			eta_min=scheduler_params['min_lr'],
 			last_epoch=-1
 		)
-	elif scheduler_params['scheduler_name'] == 'OneCycleLR':
-		scheduler = OneCycleLR(
-			optimizer,
-			max_lr=scheduler_params['max_lr'],
-			steps_per_epoch=int(((scheduler_params['num_fold'] - 1) * train_df.shape[0]) / (
-					scheduler_params['num_fold'] * scheduler_params['batch_size'])) + 1,
-			epochs=scheduler_params['epochs'],
-		)
 
 	elif scheduler_params['scheduler_name'] == 'CosineAnnealingLR':
 		scheduler = CosineAnnealingLR(
@@ -636,7 +623,7 @@ for fold in TRAIN_FOLDS:
 	)
 
 	# Model, cost function and optimizer instancing
-	model = PetNet()
+	model = Petnet()
 	model = model.to(params['device'])
 	criterion = nn.BCEWithLogitsLoss()
 	optimizer = torch.optim.AdamW(model.parameters(), lr=params['lr'],
