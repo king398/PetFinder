@@ -42,14 +42,9 @@
 # In[1]:
 
 
-
-
 # # Installations
 
 # In[2]:
-
-
-
 
 
 # # Imports
@@ -88,14 +83,14 @@ from albumentations.pytorch.transforms import ToTensorV2
 
 # Deep Learning
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts,  CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, CosineAnnealingLR
 import torch
 import torchvision
 import timm
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-#Metrics
+# Metrics
 from sklearn.metrics import mean_squared_error
 
 # Random Seed Initialize
@@ -122,7 +117,6 @@ else:
 
 print(f'Using device: {device}')
 
-
 # In[ ]:
 
 
@@ -135,7 +129,6 @@ sample_sub_file_path = os.path.join("F:\Pycharm_projects\PetFinder\data\sample_s
 
 print(f'Train file: {train_file_path}')
 print(f'Train file: {sample_sub_file_path}')
-
 
 # In[ ]:
 
@@ -158,18 +151,15 @@ def return_filpath(name, folder=train_dir):
 train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
-
 # In[ ]:
 
 
 train_df.head()
 
-
 # In[ ]:
 
 
 test_df.head()
-
 
 # In[ ]:
 
@@ -180,14 +170,12 @@ cols = list(train_df.columns)
 features = [feat for feat in cols if feat not in not_features]
 print(features)
 
-
 # # CFG
 
 # In[ ]:
 
 
 TRAIN_FOLDS = [0]
-
 
 # In[ ]:
 
@@ -364,7 +352,6 @@ def show_image(train_dataset=train_dataset, inline=4):
 for i in range(3):
 	show_image(inline=4)
 
-
 # In[ ]:
 
 
@@ -457,41 +444,121 @@ def get_scheduler(optimizer, scheduler_params=params):
 
 # In[ ]:
 
-
-class GeM(nn.Module):
-	def __init__(self, p=4, eps=1e-6):
-		super(GeM, self).__init__()
-		self.p = nn.Parameter(torch.ones(1) * p)
-		self.eps = eps
+class BasicConv(nn.Module):
+	def __init__(
+			self,
+			in_planes,
+			out_planes,
+			kernel_size,
+			stride=1,
+			padding=0,
+			dilation=1,
+			groups=1,
+			relu=True,
+			bn=True,
+			bias=False,
+	):
+		super(BasicConv, self).__init__()
+		self.out_channels = out_planes
+		self.conv = nn.Conv2d(
+			in_planes,
+			out_planes,
+			kernel_size=kernel_size,
+			stride=stride,
+			padding=padding,
+			dilation=dilation,
+			groups=groups,
+			bias=bias,
+		)
+		self.bn = (
+			nn.BatchNorm2d(out_planes, eps=1e-5, momentum=0.01, affine=True)
+			if bn
+			else None
+		)
+		self.relu = nn.ReLU() if relu else None
 
 	def forward(self, x):
-		return self.gem(x, p=self.p, eps=self.eps)
-
-	def gem(self, x, p=3, eps=1e-6):
-		return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1. / p)
-
-	def __repr__(self):
-		return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(
-			self.eps) + ')'
+		x = self.conv(x)
+		if self.bn is not None:
+			x = self.bn(x)
+		if self.relu is not None:
+			x = self.relu(x)
+		return x
 
 
-class Petnet(nn.Module):
+class ZPool(nn.Module):
+	def forward(self, x):
+		return torch.cat(
+			(torch.max(x, 1)[0].unsqueeze(1), torch.mean(x, 1).unsqueeze(1)), dim=1
+		)
+
+
+class AttentionGate(nn.Module):
+	def __init__(self):
+		super(AttentionGate, self).__init__()
+		kernel_size = 7
+		self.compress = ZPool()
+		self.conv = BasicConv(
+			2, 1, kernel_size, stride=1, padding=(kernel_size - 1) // 2, relu=False
+		)
+
+	def forward(self, x):
+		x_compress = self.compress(x)
+		x_out = self.conv(x_compress)
+		scale = torch.sigmoid_(x_out)
+		return x * scale
+
+
+class TripletAttention(nn.Module):
+	def __init__(self, no_spatial=False):
+		super(TripletAttention, self).__init__()
+		self.cw = AttentionGate()
+		self.hc = AttentionGate()
+		self.no_spatial = no_spatial
+		if not no_spatial:
+			self.hw = AttentionGate()
+
+	def forward(self, x):
+		x_perm1 = x.permute(0, 2, 1, 3).contiguous()
+		x_out1 = self.cw(x_perm1)
+		x_out11 = x_out1.permute(0, 2, 1, 3).contiguous()
+		x_perm2 = x.permute(0, 3, 2, 1).contiguous()
+		x_out2 = self.hc(x_perm2)
+		x_out21 = x_out2.permute(0, 3, 2, 1).contiguous()
+		if not self.no_spatial:
+			x_out = self.hw(x)
+			x_out = 1 / 3 * (x_out + x_out11 + x_out21)
+		else:
+			x_out = 1 / 2 * (x_out11 + x_out21)
+		return x_out
+
+
+class PetNet(nn.Module):
 	def __init__(self, model_name=params['model'], out_features=params['out_features'],
 	             inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		self.model = timm.create_model(model_name, pretrained=pretrained)
-		self.n_features = self.model.classifier.in_features
-		self.model.classifier = nn.Identity()
-		self.fc = nn.Linear(self.n_features, self.cfg.target_size)
+		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
+		n_features = self.model.head.in_features
+		self.attention = TripletAttention()
+		self.model.head = nn.Linear(n_features, 128)
+		self.fc = nn.Sequential(
+			nn.Linear(128 + num_dense, 64),
+			nn.ReLU(),
+			nn.Linear(64, out_features)
+		)
+		self.dropout = nn.Dropout(params['dropout'])
 
-	def feature(self, image):
-		feature = self.model(image)
-		return feature
+	def forward(self, image, dense):
+		embeddings = self.model(image)
+		print(embeddings.shape)
+		x = self.dropout(embeddings)
 
-	def forward(self, image):
-		feature = self.feature(image)
-		output = self.fc(feature)
+		x = torch.cat([x, dense], dim=1)
+
+		x = self.attention(x)
+
+		output = self.fc(x)
 		return output
 
 
@@ -578,7 +645,6 @@ def validate_fn(val_loader, model, criterion, epoch, params):
 best_models_of_each_fold = []
 rmse_tracker = []
 
-
 # In[ ]:
 
 
@@ -623,7 +689,7 @@ for fold in TRAIN_FOLDS:
 	)
 
 	# Model, cost function and optimizer instancing
-	model = Petnet()
+	model = PetNet()
 	model = model.to(params['device'])
 	criterion = nn.BCEWithLogitsLoss()
 	optimizer = torch.optim.AdamW(model.parameters(), lr=params['lr'],
@@ -662,13 +728,11 @@ for fold in TRAIN_FOLDS:
 print('')
 print(f'Average RMSE of all folds: {round(np.mean(rmse_tracker), 4)}')
 
-
 # In[ ]:
 
 
 for i, name in enumerate(best_models_of_each_fold):
 	print(f'Best model of fold {i + 1}: {name}')
-
 
 # This is a simple starter kernel on implementation of Transfer Learning using Pytorch for this problem. Pytorch has many SOTA Image models which you can try out using the guidelines in this notebook.
 # 
