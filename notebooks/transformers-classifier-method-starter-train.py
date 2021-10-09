@@ -539,9 +539,11 @@ class PetNet(nn.Module):
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
 		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
+		self.base_model = nn.Sequential(*list(model.children())[:-2])
 		n_features = self.model.head.in_features
+		self.head = nn.Linear(512, self.cfg.target_size)
+
 		self.attention = TripletAttention()
-		self.model.head = nn.Linear(n_features, 128)
 		self.fc = nn.Sequential(
 			nn.Linear(128 + num_dense, 64),
 			nn.ReLU(),
@@ -550,13 +552,12 @@ class PetNet(nn.Module):
 		self.dropout = nn.Dropout(params['dropout'])
 
 	def forward(self, image, dense):
-		embeddings = self.model(image)
-		print(embeddings.shape)
-		x = self.dropout(embeddings)
-
+		x = self.base_model(image)
+		x = self.attention(x)
+		x = self.head(x)
+		print(x.shape)
 		x = torch.cat([x, dense], dim=1)
 
-		x = self.attention(x)
 
 		output = self.fc(x)
 		return output
