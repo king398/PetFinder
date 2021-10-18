@@ -1,30 +1,30 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# ![SETI](https://www.petfinder.my/images/cuteness_meter.jpg)  
-# 
+# ![SETI](https://www.petfinder.my/images/cuteness_meter.jpg)
+#
 # # Problem Statement
 # * Millions of stray animals suffer on the streets or are euthanized in shelters every day around the world. You might expect pets with attractive photos to generate more interest and be adopted faster.
 # * With the help of data science, we will accurately determine a pet photo’s appeal to give these rescue animals a higher chance of loving homes.
 # * Currently, PetFinder.my uses a basic Cuteness Meter to rank pet photos. It analyzes picture composition and other factors compared to the performance of thousands of pet profiles.
-# 
+#
 # ## Why this competition?
-# As evident from the problem statement, this competition presents an interesting challenge for a good cause.  
+# As evident from the problem statement, this competition presents an interesting challenge for a good cause.
 # Also (if successful) the solution can be adapted into tools that will can shelters and rescuers around the world to improve the appeal of their pet profiles, automatically enhancing photo quality and consequently helping animals find a suitable hjome much faster.
-# 
+#
 # ## Expected Outcome
 # Given a photo a pet animal and some basic information about the photo as dense features, we should be able to estimate the 'pawpularity' score of the pet.
-# 
+#
 # ## Data Description
 # Image data is stored in a jpg image format in training folder and the dense features and target scores are mentioned in the `train.csv` file where the Id of each row corresponds to an unique image in the training folder.
 # There are also some basic info on the photograph as dense features on the `train.csv` file.
-# 
+#
 # ## Grading Metric
 # Submissions are evaluated on **RMSE** between the predicted value and the observed target.
-# 
+#
 # ## Problem Category
 # From the data and objective its is evident that this is a **Regression Problem** in the Computer Vision domain.
-# 
+#
 # **If you found this notebook useful and use parts of it in your work, please don't forget to show your appreciation by upvoting this kernel. That keeps me motivated and inspires me to write and share these public kernels.** 😊
 
 # # About This Notebook:-
@@ -32,9 +32,9 @@
 # * We use a vanilla **vit_large_patch32_384** model for extracting image embeddings and concatenate them with the dense features on the last layer on a NN.
 # * Refer [this link](https://www.kaggle.com/c/petfinder-pawpularity-score/discussion/275094) for description regarding using this particular methodology.
 # * This notebook only covers the training part. Inference can be found in the notebook link below.
-# 
-# Inference Notebook:- https://www.kaggle.com/manabendrarout/transformers-classifier-method-starter-infer  
-# 
+#
+# Inference Notebook:- https://www.kaggle.com/manabendrarout/transformers-classifier-method-starter-infer
+#
 # <p style='color: #fc0362; font-family: Segoe UI; font-size: 1.5em; font-weight: 300; font-size: 24px'>TLDR:- We treat this problem as a classification problem by scaling all targets between [0, 1] and use cross entropy loss as loss-function. It is known that transformer based models are performing better than classic CNN based models on this dataset.</p>
 
 # # Get GPU Info
@@ -207,17 +207,17 @@ params = {
 
 
 # # Augmentations
-# 
-# There a well known concept called **image augmentations** in CNN. What augmentation generally does is, it artificially increases the dataset size by subtly modifying the existing images to create new ones (while training). One added advantage of this is:- The model becomes more generalized and focuses to finding features and representations rather than completely overfitting to the training data. It also sometimes helps the model train on more noisy data as compared to conventional methods.  
-# 
-# Example:-  
-# ![](https://www.researchgate.net/publication/319413978/figure/fig2/AS:533727585333249@1504261980375/Data-augmentation-using-semantic-preserving-transformation-for-SBIR.png)  
+#
+# There a well known concept called **image augmentations** in CNN. What augmentation generally does is, it artificially increases the dataset size by subtly modifying the existing images to create new ones (while training). One added advantage of this is:- The model becomes more generalized and focuses to finding features and representations rather than completely overfitting to the training data. It also sometimes helps the model train on more noisy data as compared to conventional methods.
+#
+# Example:-
+# ![](https://www.researchgate.net/publication/319413978/figure/fig2/AS:533727585333249@1504261980375/Data-augmentation-using-semantic-preserving-transformation-for-SBIR.png)
 # Source:- https://www.researchgate.net/publication/319413978/figure/fig2/AS:533727585333249@1504261980375/Data-augmentation-using-semantic-preserving-transformation-for-SBIR.png
-# 
-# One of the most popular image augmentation libraries is **Albumentations**. It has an extensive list of image augmentations, the full list can be found in their [documentation](https://albumentations.ai/docs/).  
-# 
-# *Tip:- Not all augmentations are applicable in all conditions. It really depends on the dataset and the problem. Example:- If your task is to identify if a person is standing or sleeping, applying a rotational augmentation can make the model worse.*  
-# 
+#
+# One of the most popular image augmentation libraries is **Albumentations**. It has an extensive list of image augmentations, the full list can be found in their [documentation](https://albumentations.ai/docs/).
+#
+# *Tip:- Not all augmentations are applicable in all conditions. It really depends on the dataset and the problem. Example:- If your task is to identify if a person is standing or sleeping, applying a rotational augmentation can make the model worse.*
+#
 # With that in mind, let's define our augmentations:-
 
 # ## 1. Train Augmentations
@@ -402,15 +402,15 @@ class MetricMonitor:
 
 
 # # Scheduler
-# 
+#
 # Scheduler is essentially an function that changes our learning rate over epochs/steps. But why do we need to do that?
 # 1. The first reason is that our network may become stuck in either saddle points or local minima, and the low learning rate may not be sufficient to break out of the area and descend into areas of the loss landscape with lower loss.
 # 2. Secondly, our model and optimizer may be very sensitive to our initial learning rate choice. If we make a poor initial choice in learning rate, our model may be stuck from the very start.
-# 
+#
 # Instead, we can use Schedulers and specifically Cyclical Learning Rates(CLR) to oscillate our learning rate between upper and lower bounds, enabling us to:
 # * Have more freedom in our initial learning rate choices.
 # * Break out of saddle points and local minima.
-# 
+#
 # In practice, using CLRs leads to far fewer learning rate tuning experiments along with near identical accuracy to exhaustive hyperparameter tuning.
 
 # In[ ]:
@@ -436,102 +436,13 @@ def get_scheduler(optimizer, scheduler_params=params):
 
 
 # # CNN Model
-# 
-# We will inherit from the nn.Module class to define our model. This is a easy as well as effective way of defining the model as it allows very granular control over the complete NN. We are not using the full capability of it here since it is a starter model, but practicing similar definitions will help if/when you decide to play around a little more with the NN layers and functions.  
-# 
-# Also we are using timm for instancing a pre-trained model.  
-# The complete list of Pytorch pre-trained image models through timm can be found [here](https://rwightman.github.io/pytorch-image-models/)  
+#
+# We will inherit from the nn.Module class to define our model. This is a easy as well as effective way of defining the model as it allows very granular control over the complete NN. We are not using the full capability of it here since it is a starter model, but practicing similar definitions will help if/when you decide to play around a little more with the NN layers and functions.
+#
+# Also we are using timm for instancing a pre-trained model.
+# The complete list of Pytorch pre-trained image models through timm can be found [here](https://rwightman.github.io/pytorch-image-models/)
 
 # In[ ]:
-
-class BasicConv(nn.Module):
-	def __init__(
-			self,
-			in_planes,
-			out_planes,
-			kernel_size,
-			stride=1,
-			padding=0,
-			dilation=1,
-			groups=1,
-			relu=True,
-			bn=True,
-			bias=False,
-	):
-		super(BasicConv, self).__init__()
-		self.out_channels = out_planes
-		self.conv = nn.Conv2d(
-			in_planes,
-			out_planes,
-			kernel_size=kernel_size,
-			stride=stride,
-			padding=padding,
-			dilation=dilation,
-			groups=groups,
-			bias=bias,
-		)
-		self.bn = (
-			nn.BatchNorm2d(out_planes, eps=1e-5, momentum=0.01, affine=True)
-			if bn
-			else None
-		)
-		self.relu = nn.ReLU() if relu else None
-
-	def forward(self, x):
-		x = self.conv(x)
-		if self.bn is not None:
-			x = self.bn(x)
-		if self.relu is not None:
-			x = self.relu(x)
-		return x
-
-
-class ZPool(nn.Module):
-	def forward(self, x):
-		return torch.cat(
-			(torch.max(x, 1)[0].unsqueeze(1), torch.mean(x, 1).unsqueeze(1)), dim=1
-		)
-
-
-class AttentionGate(nn.Module):
-	def __init__(self):
-		super(AttentionGate, self).__init__()
-		kernel_size = 7
-		self.compress = ZPool()
-		self.conv = BasicConv(
-			2, 1, kernel_size, stride=1, padding=(kernel_size - 1) // 2, relu=False
-		)
-
-	def forward(self, x):
-		x_compress = self.compress(x)
-		x_out = self.conv(x_compress)
-		scale = torch.sigmoid_(x_out)
-		return x * scale
-
-
-class TripletAttention(nn.Module):
-	def __init__(self, no_spatial=False):
-		super(TripletAttention, self).__init__()
-		self.cw = AttentionGate()
-		self.hc = AttentionGate()
-		self.no_spatial = no_spatial
-		if not no_spatial:
-			self.hw = AttentionGate()
-
-	def forward(self, x):
-		x_perm1 = x.permute(0, 2, 1, 3).contiguous()
-		x_out1 = self.cw(x_perm1)
-		x_out11 = x_out1.permute(0, 2, 1, 3).contiguous()
-		x_perm2 = x.permute(0, 3, 2, 1).contiguous()
-		x_out2 = self.hc(x_perm2)
-		x_out21 = x_out2.permute(0, 3, 2, 1).contiguous()
-		if not self.no_spatial:
-			x_out = self.hw(x)
-			x_out = 1 / 3 * (x_out + x_out11 + x_out21)
-		else:
-			x_out = 1 / 2 * (x_out11 + x_out21)
-		return x_out
-
 
 class PetNet(nn.Module):
 	def __init__(self, model_name=params['model'], out_features=params['out_features'],
@@ -539,11 +450,8 @@ class PetNet(nn.Module):
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
 		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
-		self.base_model = nn.Sequential(*list(model.children())[:-2])
 		n_features = self.model.head.in_features
-		self.head = nn.Linear(512, self.cfg.target_size)
-
-		self.attention = TripletAttention()
+		self.model.head = nn.Linear(n_features, 128)
 		self.fc = nn.Sequential(
 			nn.Linear(128 + num_dense, 64),
 			nn.ReLU(),
@@ -552,13 +460,9 @@ class PetNet(nn.Module):
 		self.dropout = nn.Dropout(params['dropout'])
 
 	def forward(self, image, dense):
-		x = self.base_model(image)
-		x = self.attention(x)
-		x = self.head(x)
-		print(x.shape)
+		embeddings = self.model(image)
+		x = self.dropout(embeddings)
 		x = torch.cat([x, dense], dim=1)
-
-
 		output = self.fc(x)
 		return output
 
@@ -586,13 +490,12 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 			images = images.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
 			target = target.to(params['device'], non_blocking=True).float().view(-1, 1)
-
-		output = model(images, dense)
-
-		if params['mixup']:
-			loss = mixup_criterion(criterion, output, target_a, target_b, lam)
-		else:
-			loss = criterion(output, target)
+		with torch.cuda.amp.autocast():
+			output = model(images, dense)
+			if params['mixup']:
+				loss = mixup_criterion(criterion, output, target_a, target_b, lam)
+			else:
+				loss = criterion(output, target)
 
 		rmse_score = usr_rmse_score(output, target)
 		metric_monitor.update('Loss', loss.item())
@@ -623,8 +526,10 @@ def validate_fn(val_loader, model, criterion, epoch, params):
 			images = images.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
 			target = target.to(params['device'], non_blocking=True).float().view(-1, 1)
-			output = model(images, dense)
-			loss = criterion(output, target)
+			with  torch.cuda.amp.autocast():
+				output = model(images, dense)
+				loss = criterion(output, target)
+
 			rmse_score = usr_rmse_score(output, target)
 			metric_monitor.update('Loss', loss.item())
 			metric_monitor.update('RMSE', rmse_score)
@@ -736,9 +641,9 @@ for i, name in enumerate(best_models_of_each_fold):
 	print(f'Best model of fold {i + 1}: {name}')
 
 # This is a simple starter kernel on implementation of Transfer Learning using Pytorch for this problem. Pytorch has many SOTA Image models which you can try out using the guidelines in this notebook.
-# 
+#
 # I hope you have learnt something from this notebook. I have created this notebook as a baseline model, which you can easily fork and paly-around with to get much better results. I might update parts of it down the line when I get more GPU hours and some interesting ideas.
-# 
+#
 # **If you liked this notebook and use parts of it in you code, please show some support by upvoting this kernel. It keeps me inspired to come-up with such starter kernels and share it with the community.**
-# 
+#
 # Thanks and happy kaggling!
