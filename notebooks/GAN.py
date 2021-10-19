@@ -22,6 +22,7 @@ train_datagen = ImageDataGenerator(
 class cfg:
 	img_size = 384
 	train_batch_size = 16
+	val_batch_size = 16
 
 
 # data
@@ -45,3 +46,4 @@ train_generator_valid = train_datagen.flow_from_dataframe(
 	target_size=(cfg.img_size, cfg.img_size),
 	batch_size=cfg.val_batch_size,
 	subset="validation")
+
