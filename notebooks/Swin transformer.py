@@ -8,6 +8,10 @@ import tensorflow_addons as tfa
 import imagesize
 import wandb
 import yaml
+import sys
+
+sys.path.append('../input/swintransformertf')
+from swintransformer import SwinTransformer
 
 from vit_keras import vit
 from IPython import display as ipd
@@ -51,7 +55,7 @@ class CFG:
 
 	device = "TPU"  # or "GPU"
 
-	model_name = 'vit_b16'  # 'vit_b32'
+	model_name = 'swin_large_384'  # 'vit_b32'
 
 	# USE DIFFERENT SEED FOR DIFFERENT STRATIFIED KFOLD
 	seed = 42
@@ -415,3 +419,285 @@ def RMSE(y_true, y_pred, denormalize=True):
 
 
 RMSE.__name__ = 'rmse'
+
+import efficientnet.tfkeras as efn
+from vit_keras import vit, utils, visualize, layers
+
+name2effnet = {
+	'efficientnet_b0': efn.EfficientNetB0,
+	'efficientnet_b1': efn.EfficientNetB1,
+	'efficientnet_b2': efn.EfficientNetB2,
+	'efficientnet_b3': efn.EfficientNetB3,
+	'efficientnet_b4': efn.EfficientNetB4,
+	'efficientnet_b5': efn.EfficientNetB5,
+	'efficientnet_b6': efn.EfficientNetB6,
+	'efficientnet_b7': efn.EfficientNetB7,
+}
+
+
+def build_model(model_name=CFG.model_name, DIM=CFG.img_size[0], compile_model=True, include_top=False):
+	image_input = tf.keras.layers.Input(shape=(DIM, DIM, 3))
+	# img_adjust_layer = tf.keras.layers.experimental.preprocessing.Resizing(DIM, DIM)
+	pretrained_model = SwinTransformer(CFG.model_name, include_top=False, pretrained=True, use_tpu=True)
+	base = tf.keras.Sequential([pretrained_model,
+	                            tf.keras.layers.Dropout(0.2),
+	                            tf.keras.layers.Dense(64, activation='Mish'),
+	                            tf.keras.layers.Dropout(0.2),
+	                            tf.keras.layers.Dense(1, activation='sigmoid')])
+	# x = img_adjust_layer(image_input)
+	x = base(image_input)
+	model = tf.keras.Model(inputs=image_input, outputs=x)
+	if compile_model:
+		# optimizer
+		opt = tf.keras.optimizers.Adam(learning_rate=0.001)
+		# loss
+		loss = tf.keras.losses.BinaryCrossentropy(label_smoothing=0.01)
+		# metric
+		rmse = RMSE
+		model.compile(optimizer=opt,
+		              loss=loss,
+		              metrics=[rmse])
+	return model
+
+
+def get_lr_callback(batch_size=8, plot=False):
+	lr_start = 0.000005
+	lr_max = 0.00000125 * REPLICAS * batch_size
+	lr_min = 0.000001
+	lr_ramp_ep = 5
+	lr_sus_ep = 0
+	lr_decay = 0.8
+
+	def lrfn(epoch):
+		if epoch < lr_ramp_ep:
+			lr = (lr_max - lr_start) / lr_ramp_ep * epoch + lr_start
+
+		elif epoch < lr_ramp_ep + lr_sus_ep:
+			lr = lr_max
+
+		elif CFG.scheduler == 'exp':
+			lr = (lr_max - lr_min) * lr_decay ** (epoch - lr_ramp_ep - lr_sus_ep) + lr_min
+
+		elif CFG.scheduler == 'cosine':
+			decay_total_epochs = CFG.epochs - lr_ramp_ep - lr_sus_ep + 3
+			decay_epoch_index = epoch - lr_ramp_ep - lr_sus_ep
+			phase = math.pi * decay_epoch_index / decay_total_epochs
+			cosine_decay = 0.5 * (1 + math.cos(phase))
+			lr = (lr_max - lr_min) * cosine_decay + lr_min
+		return lr
+
+	if plot:
+		plt.figure(figsize=(10, 5))
+		plt.plot(np.arange(CFG.epochs), [lrfn(epoch) for epoch in np.arange(CFG.epochs)], marker='o')
+		plt.xlabel('epoch');
+		plt.ylabel('learnig rate')
+		plt.title('Learning Rate Scheduler')
+		plt.show()
+
+	lr_callback = tf.keras.callbacks.LearningRateScheduler(lrfn, verbose=False)
+	return lr_callback
+
+
+_ = get_lr_callback(CFG.batch_size, plot=True)
+if CFG.wandb:
+	def wandb_init(fold):
+		config = {k: v for k, v in dict(vars(CFG)).items() if '__' not in k}
+		config.update({"fold": int(fold)})
+		yaml.dump(config, open(f'/kaggle/working/config fold-{fold}.yaml', 'w'), )
+		config = yaml.load(open(f'/kaggle/working/config fold-{fold}.yaml', 'r'), Loader=yaml.FullLoader)
+		run = wandb.init(project="petfinder-public",
+		                 name=f"fold-{fold}|dim-{CFG.img_size[0]}|model-{CFG.model_name}",
+		                 config=config,
+		                 anonymous=anonymous,
+		                 group=CFG.exp_name
+		                 )
+		return run
+
+
+def log_wandb(fold):
+	"log best result and grad-cam for error analysis"
+
+	valid_df = df.loc[df.fold == fold].copy()
+	if CFG.debug:
+		valid_df = valid_df.iloc[:1000]
+	valid_df['pred'] = oof_pred[fold].reshape(-1)
+	valid_df['diff'] = abs(valid_df.Pawpularity - valid_df.pred)
+	valid_df = valid_df[valid_df.fold == fold].reset_index(drop=True)
+	vali_df = valid_df.sort_values(by='diff', ascending=False)
+
+	noimg_cols = ['Id', 'fold', 'Subject Focus', 'Eyes', 'Face', 'Near', 'Action', 'Accessory', 'Group',
+	              'Collage', 'Human', 'Occlusion', 'Info', 'Blur',
+	              'Pawpularity', 'pred', 'diff']
+	# select top and worst 10 cases
+	gradcam_df = pd.concat((valid_df.head(10), valid_df.tail(10)), axis=0)
+	gradcam_ds = build_dataset(gradcam_df.image_path, labels=None, cache=False, batch_size=1,
+	                           repeat=False, shuffle=False, augment=False)
+	data = []
+
+
+oof_pred = [];
+oof_tar = [];
+oof_val = [];
+oof_ids = [];
+oof_folds = []
+preds = np.zeros((test_df.shape[0], 1))
+
+for fold in np.arange(CFG.folds):
+	if fold not in CFG.selected_folds:
+		continue
+	if CFG.wandb:
+		run = wandb_init(fold)
+		WandbCallback = wandb.keras.WandbCallback(save_model=False)
+	if CFG.device == 'TPU':
+		if tpu: tf.tpu.experimental.initialize_tpu_system(tpu)
+
+	# TRAIN AND VALID DATAFRAME
+	train_df = df.query("fold!=@fold")
+	valid_df = df.query("fold==@fold")
+
+	# CREATE TRAIN AND VALIDATION SUBSETS
+	train_paths = train_df.image_path.values;
+	train_labels = train_df[CFG.target_col].values.astype(np.float32)
+	valid_paths = valid_df.image_path.values;
+	valid_labels = valid_df[CFG.target_col].values.astype(np.float32)
+	test_paths = test_df.image_path.values
+
+	# SHUFFLE IMAGE AND LABELS
+	index = np.arange(len(train_paths))
+	np.random.shuffle(index)
+	train_paths = train_paths[index]
+	train_labels = train_labels[index]
+
+	if CFG.debug:
+		train_paths = train_paths[:2000];
+		train_labels = train_labels[:2000]
+		valid_paths = valid_paths[:1000];
+		valid_labels = valid_labels[:1000]
+
+	print('#' * 25);
+	print('#### FOLD', fold)
+	print('#### IMAGE_SIZE: (%i, %i) | MODEL_NAME: %s | BATCH_SIZE: %i' %
+	      (CFG.img_size[0], CFG.img_size[1], CFG.model_name, CFG.batch_size * REPLICAS))
+	train_images = len(train_paths)
+	val_images = len(valid_paths)
+	if CFG.wandb:
+		wandb.log({'num_train': train_images,
+		           'num_valid': val_images})
+	print('#### NUM_TRAIN %i | NUM_VALID: %i' % (train_images, val_images))
+
+	# BUILD MODEL
+	K.clear_session()
+	with strategy.scope():
+		model = build_model(CFG.model_name, DIM=CFG.img_size[0], compile_model=True)
+
+	# DATASET
+	train_ds = build_dataset(train_paths, train_labels, cache=True, batch_size=CFG.batch_size * REPLICAS,
+	                         repeat=True, shuffle=True, augment=CFG.augment)
+	val_ds = build_dataset(valid_paths, valid_labels, cache=True, batch_size=CFG.batch_size * REPLICAS,
+	                       repeat=False, shuffle=False, augment=False)
+
+	print('#' * 25)
+	# SAVE BEST MODEL EACH FOLD
+	sv = tf.keras.callbacks.ModelCheckpoint(
+		'fold-%i.h5' % fold, monitor='val_rmse', verbose=CFG.verbose, save_best_only=True,
+		save_weights_only=False, mode='min', save_freq='epoch')
+	callbacks = [sv, get_lr_callback(CFG.batch_size)]
+	if CFG.wandb:
+		callbacks.append(WandbCallback)
+	# TRAIN
+	print('Training...')
+	history = model.fit(
+		train_ds,
+		epochs=CFG.epochs if not CFG.debug else 2,
+		callbacks=callbacks,
+		steps_per_epoch=len(train_paths) / CFG.batch_size // REPLICAS,
+		validation_data=val_ds,
+		# class_weight = {0:1,1:2},
+		verbose=CFG.verbose
+	)
+
+	# Loading best model for inference
+	print('Loading best model...')
+	model.load_weights('fold-%i.h5' % fold)
+
+	# PREDICT OOF USING TTA
+	print('Predicting OOF with TTA...')
+	ds_valid = build_dataset(valid_paths, labels=None, cache=False, batch_size=CFG.batch_size * REPLICAS * 2,
+	                         repeat=True, shuffle=False, augment=True if CFG.tta > 1 else False)
+	ct_valid = len(valid_paths);
+	STEPS = CFG.tta * ct_valid / CFG.batch_size / 2 / REPLICAS
+	pred = model.predict(ds_valid, steps=STEPS, verbose=CFG.verbose)[:CFG.tta * ct_valid, ]
+	oof_pred.append(np.mean(pred.reshape((ct_valid, -1, CFG.tta), order='F'), axis=-1) * 100.0)
+
+	# GET OOF TARGETS AND idS
+	oof_tar.append(valid_df[CFG.target_col].values[:(1000 if CFG.debug else len(valid_df))])
+	oof_folds.append(np.ones_like(oof_tar[-1], dtype='int8') * fold)
+	oof_ids.append(valid_df.Id.values)
+
+	# PREDICT TEST USING TTA
+	print('Predicting Test with TTA...')
+	ds_test = build_dataset(test_paths, labels=None, cache=True,
+	                        batch_size=(CFG.batch_size * 2 if len(test_df) > 8 else 1) * REPLICAS,
+	                        repeat=True, shuffle=False, augment=True if CFG.tta > 1 else False)
+	ct_test = len(test_paths);
+	STEPS = 1 if len(test_df) <= 8 else (CFG.tta * ct_test / CFG.batch_size / 2 / REPLICAS)
+	pred = model.predict(ds_test, steps=STEPS, verbose=CFG.verbose)[:CFG.tta * ct_test, ]
+	preds[:ct_test, :] += np.mean(pred.reshape((ct_test, -1, CFG.tta), order='F'),
+	                              axis=-1) / CFG.folds * 100  # not meaningful for DIBUG = True
+
+	# REPORT RESULTS
+	y_true = oof_tar[-1];
+	y_pred = oof_pred[-1]
+	rmse = RMSE(y_true.astype(np.float32), y_pred, denormalize=False).numpy()
+	oof_val.append(np.min(history.history['val_rmse']))
+	print('#### FOLD %i OOF RMSE without TTA = %.3f, with TTA = %.3f' % (fold, oof_val[-1], rmse))
+
+	if CFG.wandb:
+		log_wandb(fold)  # log result to wandb
+		wandb.run.finish()  # finish the run
+		display(ipd.IFrame(run.url, width=1080, height=720))  # show wandb dashboard
+# COMPUTE OVERALL OOF RMSE
+oof = np.concatenate(oof_pred);
+true = np.concatenate(oof_tar);
+ids = np.concatenate(oof_ids);
+folds = np.concatenate(oof_folds)
+rmse = RMSE(true.astype(np.float32), oof, denormalize=False)
+print('Overall OOF RMSE with TTA = %.3f' % rmse)
+# SAVE OOF TO DISK
+columns = ['Id', 'fold', 'true', 'pred']
+df_oof = pd.DataFrame(np.concatenate([ids[:, None], folds[:, 0:1], true, oof], axis=1), columns=columns)
+df_oof.to_csv('oof.csv', index=False)
+df_oof.head()
+import seaborn as sns
+
+sns.set(style='dark')
+
+plt.figure(figsize=(10 * 2, 6))
+
+plt.subplot(1, 2, 1)
+sns.kdeplot(x=train_df[CFG.target_col[0]], color='b', shade=True);
+sns.kdeplot(x=df_oof.pred.values, color='r', shade=True);
+plt.grid('ON')
+plt.xlabel(CFG.target_col[0]);
+plt.ylabel('freq');
+plt.title('KDE')
+plt.legend(['train', 'oof'])
+
+plt.subplot(1, 2, 2)
+sns.histplot(x=train_df[CFG.target_col[0]], color='b');
+sns.histplot(x=df_oof.pred.values, color='r');
+plt.grid('ON')
+plt.xlabel(CFG.target_col[0]);
+plt.ylabel('freq');
+plt.title('Histogram')
+plt.legend(['train', 'oof'])
+
+plt.tight_layout()
+plt.show()
+pred_df = pd.DataFrame({'Id': test_df.Id,
+                        'Pawpularity': preds.reshape(-1)})
+sub_df = pd.read_csv('/kaggle/input/petfinder-pawpularity-score/sample_submission.csv')
+del sub_df['Pawpularity']
+sub_df = sub_df.merge(pred_df, on='Id', how='left')
+sub_df.to_csv('submission.csv', index=False)
+sub_df.head(2)
