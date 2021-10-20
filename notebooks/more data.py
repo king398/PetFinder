@@ -11,16 +11,14 @@ df["AdoptionSpeed"] = 25 * (4 - df["AdoptionSpeed"].values)
 pawpularity = pd.concat([df1["Pawpularity"], df["AdoptionSpeed"]])
 ids = []
 labels = []
-import time
 
 for i, x in tqdm(zip(df["PetID"].values, df["AdoptionSpeed"].values)):
-	start = time.time()
 	all_names = glob.glob(rf"F:\Pycharm_projects\PetFinder\data\train_old/{i}-*.jpg")
-	end = time.time()
-	print(end - start)
-	start = time.time()
+
 	for y in all_names:
 		ids.append(y)
 		labels.append(x)
-	end = time.time()
-	print(end - start)
+import numpy as np
+
+np.save("F:\Pycharm_projects\PetFinder\data/idold.npy", np.array(ids))
+np.save("F:\Pycharm_projects\PetFinder\data/idold.npy", np.array(labels))
