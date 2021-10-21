@@ -11,5 +11,15 @@ df["AdoptionSpeed"] = 25 * (4 - df["AdoptionSpeed"].values)
 ids = np.load("F:\Pycharm_projects\PetFinder\data\idold.npy")
 labels = np.load("F:\Pycharm_projects\PetFinder\data\labels.npy")
 pawpularity = np.concatenate([df1["Pawpularity"].values, labels])
-for i in ids:
-	i.spilt(r"\\")
+ids_used = []
+for i in tqdm(ids):
+	i = i.split("\\")
+	i = i[5]
+	i = i.split(".")
+	i = i[0]
+	ids_used.append(i)
+full_ids = list(df1["Id"].values) + ids_used
+print(len(full_ids))
+data = {"Id": full_ids, "Labels": pawpularity}
+dict1 = pd.DataFrame.from_dict(data=data)
+dict1.to_csv(r"F:\Pycharm_projects\PetFinder\data/moredata.csv")
