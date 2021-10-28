@@ -360,14 +360,30 @@ for fold_, model_name in zip(range(10), glob.glob(models_dir + '/*.pth')):
 
 	##################
 	# OOF PREDICTIONS
-	valid_dataset = PawpularDataset(
-		image_paths=valid_img_paths,
+	valid_dataset = CuteDataset(
+		images_filepaths=valid_img_paths,
 		dense_features=df_valid[dense_features].values,
 		targets=df_valid['Pawpularity'].values / 100.0,
-		augmentations=test_aug,
+		transform=get_test_transforms(),
 	)
 	print('Predicting oof...')
-	valid_predictions = model.predict(valid_dataset, batch_size=2 * args.batch_size, n_jobs=-1)
+	valid_predictions = None
+	temp_preds = None
+	with torch.no_grad():
+		for (images, dense, target) in tqdm(test_loader, desc=f'Predicting. '):
+			images = images.to(params['device'], non_blocking=True)
+			dense = dense.to(params['device'], non_blocking=True)
+			predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
+
+			if temp_preds is None:
+				temp_preds = predictions
+			else:
+				temp_preds = np.vstack((temp_preds, predictions))
+
+	if valid_predictions is None:
+		predicted_labels = temp_preds
+	else:
+		valid_predictions += temp_preds
 
 	final_oof_predictions = []
 	embed = np.array([]).reshape((0, 128 + 12))
