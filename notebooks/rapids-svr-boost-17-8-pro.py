@@ -375,13 +375,13 @@ for fold_, model_name in zip(range(10), glob.glob(models_dir + '/*.pth')):
 			dense = dense.to(params['device'], non_blocking=True)
 			predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
 
-			if temp_preds is None:
+			if valid_predictions is None:
 				temp_preds = predictions
 			else:
 				temp_preds = np.vstack((temp_preds, predictions))
 
-	if valid_predictions is None:
-		predicted_labels = temp_preds
+	if temp_preds is None:
+		valid_predictions = temp_preds
 	else:
 		valid_predictions += temp_preds
 
