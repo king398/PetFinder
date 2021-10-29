@@ -3,22 +3,22 @@
 
 # # Boost CV LB +0.2 with RAPIDS SVR Head
 # In this notebook, we demonstrate how to add a RAPIDS SVR second head to an already trained CNN or Image Transformer with first head. This boosts CV LB by +0.2! This trick was used in CommonLit Comp [here][3] to boost our team into Gold Medal!
-# 
+#
 # We begin with [Abhishek's][2] public notebook [here][1] which already contains a fully trained Image Transformer model (with NN head). Now in this notebook, we extract the image embeddings (from the trained fold models) and train additional RAPIDS SVR heads for each fold. The original NN head achieves overall CV RSME 18.0 and the new RAPIDS SVR head achieves overall CV RSME 18.0. Both heads are very diverse because the NN head uses Classification (BCE) loss and the SVR head uses Regression loss. During inference, we predict with both heads. When we average both heads' predictions, we achieve overall CV RSME 17.8!
-# 
+#
 # The technique illustrated here can be applied to any trained image (or NLP) model for CV LB boost! In the first version of this notebook, we train the SVR heads and save the fold models. Then, in later notebook versions and during Kaggle submission, we load the saved SVR models (from this notebook's version 1 which was made into a Kaggle dataset).
-# 
+#
 # [1]: https://www.kaggle.com/abhishek/tez-pawpular-swin-ference
 # [2]: https://www.kaggle.com/abhishek
 # [3]: https://www.kaggle.com/c/commonlitreadabilityprize/discussion/260800
 
 # # How to Add RAPIDS SVR Head
 # There are 3 steps to building a double headed model. The first step is to train your Image NN backbone and head. This was done by Abhishek in his notebook [here][1] and achieves CV RSME 18.0. The next step is to train our RAPIDS SVR head with extracted embeddings from frozen Image NN backbone. This is done in version 1 of notebook you are reading [here][2] and achieves CV RSME 18.0. Lastly, we infer with both heads and average the predictions. This is done in the notebook you are reading and achieves CV RSME 17.8!
-# 
+#
 # ![](https://raw.githubusercontent.com/cdeotte/Kaggle_Images/main/Oct-2021/st1.png)
 # ![](https://raw.githubusercontent.com/cdeotte/Kaggle_Images/main/Oct-2021/st2.png)
 # ![](https://raw.githubusercontent.com/cdeotte/Kaggle_Images/main/Oct-2021/st3.png)
-# 
+#
 # [1]: https://www.kaggle.com/abhishek/tez-pawpular-swin-ference
 # [2]: https://www.kaggle.com/cdeotte/rapids-svr-boost-17-8?scriptVersionId=76282086
 
@@ -281,19 +281,20 @@ for fold_, model_name in zip(range(10), glob.glob(models_dir + '/*.pth')):
 		print('Extracting train embedding...')
 
 		train_predictions = None
-		temp_preds = None
 
 		with torch.no_grad():
 			for (images, dense, target) in tqdm(train_loader, desc=f'Predicting. '):
 				images = images.to(params['device'], non_blocking=True)
 				dense = dense.to(params['device'], non_blocking=True)
 				predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
-			if temp_preds is None:
+			if train_predictions is None:
 				train_predictions = predictions
 			else:
-				train_predictions = np.vstack((temp_preds, predictions))
-
+				train_predictions = np.vstack((train_predictions, predictions))
+		print(train_predictions.shape)
 		embed = np.array([]).reshape((0, 128 + 12))
+		embed = embed[0, :]
+		print(embed.shape)
 		for preds in train_predictions:
 			embed = np.concatenate([embed, preds[:, 1:]], axis=0)
 
@@ -345,14 +346,16 @@ for fold_, model_name in zip(range(10), glob.glob(models_dir + '/*.pth')):
 		test_predictions = temp_preds
 	else:
 		test_predictions += temp_preds
+	test_predictions = np.squeeze(test_predictions)
 
 	final_test_predictions = []
 	embed = np.array([]).reshape((0, 128 + 12))
-	for preds in test_predictions:  # tqdm
-		final_test_predictions.extend(preds[:, :1].ravel().tolist())
-		embed = np.concatenate([embed, preds[:, 1:]], axis=0)
 
-	final_test_predictions = [sigmoid(x) * 100 for x in final_test_predictions]
+	print(embed.shape)
+	for preds in test_predictions:  # tqdm
+		embed = np.concatenate([embed, preds], axis=0)
+	final_test_predictions = test_predictions
+
 	final_test_predictions2 = clf.predict(embed)
 	super_final_predictions.append(final_test_predictions)
 	super_final_predictions2.append(final_test_predictions2)
