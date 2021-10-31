@@ -26,3 +26,19 @@ train_data = datasets.ImageFolder('F:\Pycharm_projects\PetFinder\data\Cats And D
 trainloader = torch.utils.data.DataLoader(train_data, batch_size=8, shuffle=True)
 model = timm.create_model("swin_large_patch4_window12_384_in22k", pretrained=True, num_classes=1)
 model
+# Freeze parameters so we don't backprop through them
+for param in model.parameters():
+    param.requires_grad = False
+
+from collections import OrderedDict
+
+classifier = nn.Sequential(OrderedDict([
+    ('fc1', nn.Linear(1024, 512)),
+    ('relu1', nn.ReLU()),
+    ('fc2', nn.Linear(512, 256)),
+    ('relu2', nn.ReLU()),
+    ('fc3', nn.Linear(256, 2)),
+    ('output', nn.LogSigmoid())
+]))
+
+model.classifier = classifier
