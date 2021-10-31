@@ -24,8 +24,8 @@ class Model(nn.Module):
 		x = self.fc(x)
 		return x
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = Model()
 model.to(device)
-images = images.to(device)
-print(model(images))
+
