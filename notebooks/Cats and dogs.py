@@ -42,3 +42,64 @@ classifier = nn.Sequential(OrderedDict([
 ]))
 
 model.classifier = classifier
+# Use GPU if it's available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# Freeze parameters so we don't backprop through them
+for param in model.parameters():
+    param.requires_grad = False
+
+model.classifier = nn.Sequential(nn.Linear(1024, 512),
+                                 nn.ReLU(),
+                                 nn.Dropout(0.2),
+                                 nn.Linear(512, 256),
+                                 nn.ReLU(),
+                                 nn.Dropout(0.1),
+                                 nn.Linear(256, 2),
+                                 nn.LogSigmoid())
+
+criterion = nn.NLLLoss()
+
+# Only train the classifier parameters, feature parameters are frozen
+optimizer = optim.Adam(model.classifier.parameters(), lr=0.003)
+
+model.to(device)
+
+traininglosses = []
+testinglosses = []
+testaccuracy = []
+totalsteps = []
+epochs = 1
+steps = 0
+running_loss = 0
+print_every = 5
+from tqdm import tqdm
+for epoch in tqdm(range(epochs)):
+    for inputs, labels in trainloader:
+        steps += 1
+        # Move input and label tensors to the default device
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        optimizer.zero_grad()
+
+        logps = model.forward(inputs)
+        loss = criterion(logps, labels)
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+
+        if steps % print_every == 0:
+            test_loss = 0
+            accuracy = 0
+
+
+            traininglosses.append(running_loss / print_every)
+
+            totalsteps.append(steps)
+            print(f"Device {device}.."
+                  f"Epoch {epoch + 1}/{epochs}.. "
+                  f"Step {steps}.. "
+                  f"Train loss: {running_loss / print_every:.3f}.. ")
+            running_loss = 0
