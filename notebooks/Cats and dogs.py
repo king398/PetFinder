@@ -27,6 +27,9 @@ class Model(nn.Module):
 		return x
 
 
+import albumentations
+from albumentations.pytorch.transforms import ToTensorV2
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = Model()
 model.to(device)
@@ -63,13 +66,16 @@ class CuteDataset(Dataset):
 		if self.transform is not None:
 			image = self.transform(image=image)['image']
 		image_file = image_file.split("\\")
-		print(image_file)
-		return image
+		image_file = str(image_file[6])
+		image_file = image_file.split(".")
+		if image_file[0] == "cat":
+			target = 0
+		else:
+			target = 1
+		label = torch.tensor(target).float()
+		return image, label
 
-
-import albumentations
-from albumentations.pytorch.transforms import ToTensorV2
 
 train = CuteDataset(image_path=[r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\cat.0.jpg"])
-for i in train:
-	print(i)
+for image, label in train:
+	print(label)
