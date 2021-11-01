@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import albumentations
 from albumentations.pytorch.transforms import ToTensorV2
 import cv2
+from tqdm import tqdm
 
 
 class Model(nn.Module):
@@ -78,14 +79,23 @@ class CuteDataset(Dataset):
 x = glob.glob(r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\*.jpg")
 
 shuffled = random.sample(x, len(x))
-print(shuffled)
-train = CuteDataset(
-	image_path=shuffled)
+x_test = glob.glob(r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\*.jpg")
 
-for image, label in train:
-	print(label)
-	plt.imshow(np.transpose(image.numpy()))
-	plt.show()
-	break
-train = DataLoader(train, batch_size=8, shuffle=True, num_workers=4, pin_memory=True)
+train_dl = CuteDataset(
+	image_path=shuffled, transform=get_valid_transforms())
 
+train_loader = DataLoader(train_dl, batch_size=8, shuffle=True, num_workers=0, pin_memory=False)
+loss = nn.BCELoss()
+optim = torch.optim.Adam(lr=0.0001)
+epochs = 3
+for x in tqdm(range(epochs)):
+	for i, (image, target) in enumerate(train_loader, start=1):
+		optim.zero_grad()
+
+		image = image.to(device)
+		target = target.to(device)
+		output = model(image)
+		loss = loss(output, target)
+		loss.backward()
+		optim.step()
+		break
