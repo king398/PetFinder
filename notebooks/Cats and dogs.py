@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torchvision
 import timm
@@ -6,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import random
 import glob
-
+import matplotlib.pyplot as plt
 import albumentations
 from albumentations.pytorch.transforms import ToTensorV2
 import cv2
@@ -83,3 +84,8 @@ train = CuteDataset(
 
 for image, label in train:
 	print(label)
+	plt.imshow(np.transpose(image.numpy()))
+	plt.show()
+	break
+train = DataLoader(train, batch_size=8, shuffle=True, num_workers=4, pin_memory=True)
+
