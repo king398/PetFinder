@@ -98,4 +98,6 @@ for x in tqdm(range(epochs)):
 		loss = loss(output, target)
 		loss.backward()
 		optim.step()
+		if i % 100 == 0:
+			print(loss)
 		break
