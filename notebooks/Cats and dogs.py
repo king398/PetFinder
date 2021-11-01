@@ -34,6 +34,8 @@ class Model(nn.Module):
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+scaler = torch.cuda.amp.GradScaler()
+
 model = Model()
 model.to(device)
 
