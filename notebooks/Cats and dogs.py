@@ -4,8 +4,12 @@ import timm
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+import random
+import glob
 
-images = torch.rand(1, 3, 384, 384)
+import albumentations
+from albumentations.pytorch.transforms import ToTensorV2
+import cv2
 
 
 class Model(nn.Module):
@@ -27,14 +31,9 @@ class Model(nn.Module):
 		return x
 
 
-import albumentations
-from albumentations.pytorch.transforms import ToTensorV2
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = Model()
 model.to(device)
-
-import cv2
 
 
 def get_valid_transforms(DIM=384):
@@ -75,10 +74,10 @@ class CuteDataset(Dataset):
 		return image, label
 
 
-import glob
-import random
 x = glob.glob(r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\*.jpg")
-print(x)
+
+shuffled = random.sample(x, len(x))
+print(shuffled)
 """train = CuteDataset(
 	image_path=)
 
