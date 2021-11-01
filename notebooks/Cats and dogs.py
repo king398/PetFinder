@@ -78,8 +78,8 @@ x = glob.glob(r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\*.jpg")
 
 shuffled = random.sample(x, len(x))
 print(shuffled)
-"""train = CuteDataset(
-	image_path=)
+train = CuteDataset(
+	image_path=shuffled)
 
 for image, label in train:
-	print(label)"""
+	print(label)
