@@ -86,7 +86,7 @@ train_dl = CuteDataset(
 
 train_loader = DataLoader(train_dl, batch_size=8, shuffle=True, num_workers=0, pin_memory=False)
 loss = nn.BCELoss()
-optim = torch.optim.Adam(lr=0.0001)
+optim = torch.optim.Adam(model.parameters(), lr=0.0001)
 epochs = 3
 for x in tqdm(range(epochs)):
 	for i, (image, target) in enumerate(train_loader, start=1):
