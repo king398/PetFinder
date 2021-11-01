@@ -181,7 +181,7 @@ TRAIN_FOLDS = [0]
 
 
 params = {
-	'model': 'swin_large_patch4_window12_384',
+	'model': 'swin_large_patch4_window12_384_in22k',
 	'dense_features': features,
 	'pretrained': True,
 	'inp_channels': 3,

@@ -21,12 +21,13 @@ def get_train_transforms(DIM=1024):
 
 import cv2
 
-paths = glob.glob(r"../input/petfinder-pawpularity-score/train/*.jpg")
-for i in range(10):
+paths = glob.glob(r"F:\Pycharm_projects\PetFinder\data\train/*.jpg")
+for i in range(2):
 	image_random = random.choice(paths)
 	srcBGR = cv2.imread(image_random)
 	image = cv2.cvtColor(srcBGR, cv2.COLOR_BGR2RGB)
 	image = np.array(image)
+	plt.imshow(image)
 
 	transform = get_train_transforms()
 	image = transform(image=image)['image']
