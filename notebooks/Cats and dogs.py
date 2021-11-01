@@ -59,7 +59,6 @@ class CuteDataset(Dataset):
 		return len(self.image_path)
 
 	def __getitem__(self, idx):
-		print(idx)
 		image_file = self.image_path[idx]
 		image = cv2.imread(image_file)
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -76,6 +75,12 @@ class CuteDataset(Dataset):
 		return image, label
 
 
-train = CuteDataset(image_path=[r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\cat.0.jpg"])
+import glob
+import random
+x = glob.glob(r"F:\Pycharm_projects\PetFinder\data\Cats And Dogs\train\*.jpg")
+print(x)
+"""train = CuteDataset(
+	image_path=)
+
 for image, label in train:
-	print(label)
+	print(label)"""
