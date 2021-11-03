@@ -474,6 +474,19 @@ class PetNet(nn.Module):
 
 # In[ ]:
 
+T1 = 100
+T2 = 700
+af = 3
+
+
+def alpha_weight(step):
+	if step < T1:
+		return 0.0
+	elif step > T2:
+		return af
+	else:
+		return ((step - T1) / (T2 - T1)) * af
+
 
 def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler=None):
 	metric_monitor = MetricMonitor()
