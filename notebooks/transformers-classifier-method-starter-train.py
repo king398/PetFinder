@@ -436,6 +436,8 @@ class MetricMonitor:
 
 # In[ ]:
 
+from torch.autograd import Variable
+
 
 def get_scheduler(optimizer, scheduler_params=params):
 	if scheduler_params['scheduler_name'] == 'CosineAnnealingWarmRestarts':
@@ -465,25 +467,64 @@ def get_scheduler(optimizer, scheduler_params=params):
 
 # In[ ]:
 
+
 class PetNet(nn.Module):
-	def __init__(self, model_name=params['model'], out_features=params['out_features'],
-	             inp_channels=params['inp_channels'],
+	def __init__(self, model_1_name=params['model_1'], model_2_name=params['model_2'],
+	             out_features=params['out_features'], inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
-		n_features = self.model.head.in_features
-		self.model.head = nn.Linear(n_features, 128)
+
+		# Transformer
+		self.model_1 = timm.create_model(model_1_name, pretrained=pretrained,
+		                                 in_chans=inp_channels)
+		n_features_1 = self.model_1.head.in_features
+		self.model_1.head = nn.Linear(n_features_1, 128)
+
+		# Conventional CNN
+		self.model_2 = timm.create_model(model_2_name, pretrained=pretrained,
+		                                 in_chans=inp_channels)
+		out_channels = self.model_2.conv_stem.out_channels
+		kernel_size = self.model_2.conv_stem.kernel_size
+		stride = self.model_2.conv_stem.stride
+		padding = self.model_2.conv_stem.padding
+		bias = self.model_2.conv_stem.bias
+		self.model_2.conv_stem = nn.Conv2d(inp_channels, out_channels,
+		                                   kernel_size=kernel_size,
+		                                   stride=stride, padding=padding,
+		                                   bias=bias)
+		n_features_2 = self.model_2.classifier.in_features
+		self.model_2.classifier = nn.Linear(n_features_2, 128)
+
 		self.fc = nn.Sequential(
-			nn.Linear(128 + num_dense, 64),
+			nn.Linear(128 + 128 + num_dense, 64),
 			nn.ReLU(),
 			nn.Linear(64, out_features)
 		)
-		self.dropout = nn.Dropout(params['dropout'])
+		self.dropout = nn.Dropout(0.2)
+		self.num_classes = 1
+		self.num_layers = 1
+		self.input_size = 12
+		self.hidden_size = 2
+		self.seq_length = 4
+
+		self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size,
+		                    num_layers=self.num_layers, batch_first=True)
 
 	def forward(self, image, dense):
-		embeddings = self.model(image)
-		x = self.dropout(embeddings)
-		x = torch.cat([x, dense], dim=1)
+		transformer_embeddings = self.model_1(image)
+		conv_embeddings = self.model_2(image)
+
+		h_0 = Variable(torch.zeros(
+			self.num_layers, dense.size(0), self.hidden_size))
+
+		c_0 = Variable(torch.zeros(
+			self.num_layers, dense.size(0), self.hidden_size))
+		ula, (h_out, _) = self.lstm(dense, (h_0, c_0))
+		h_out = h_out.view(-1, self.hidden_size)
+		features = torch.cat([transformer_embeddings, conv_embeddings, h_out],
+		                     dim=1)
+		print(features)
+		x = self.dropout(features)
 		output = self.fc(x)
 		return output
 
