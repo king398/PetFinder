@@ -83,7 +83,7 @@ params = {
 class PetNet(nn.Module):
 	def __init__(self, model_1_name=params['model_1'], model_2_name=params['model_2'],
 	             out_features=params['out_features'], inp_channels=params['inp_channels'],
-	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
+	             pretrained=params['pretrained']):
 		super().__init__()
 
 		# Transformer
@@ -108,16 +108,16 @@ class PetNet(nn.Module):
 		self.model_2.classifier = nn.Linear(n_features_2, 128)
 
 		self.fc = nn.Sequential(
-			nn.Linear(128 + 128 + num_dense, 64),
+			nn.Linear(128 + 128, 64),
 			nn.ReLU(),
 			nn.Linear(64, out_features)
 		)
 		self.dropout = nn.Dropout(0.2)
 
-	def forward(self, image, dense):
+	def forward(self, image):
 		transformer_embeddings = self.model_1(image)
 		conv_embeddings = self.model_2(image)
-		features = torch.cat([transformer_embeddings, conv_embeddings, dense],
+		features = torch.cat([transformer_embeddings, conv_embeddings],
 		                     dim=1)
 		x = self.dropout(features)
 		output = self.fc(x)
@@ -126,4 +126,4 @@ class PetNet(nn.Module):
 
 model = PetNet()
 model = model.to(params['device'])
-summary(model, (12, 3, 384, 384))
+summary(model, (3, 384, 384))
