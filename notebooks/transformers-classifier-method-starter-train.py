@@ -467,7 +467,6 @@ def get_scheduler(optimizer, scheduler_params=params):
 
 # In[ ]:
 
-
 class PetNet(nn.Module):
 	def __init__(self, model_1_name=params['model_1'], model_2_name=params['model_2'],
 	             out_features=params['out_features'], inp_channels=params['inp_channels'],
@@ -507,27 +506,18 @@ class PetNet(nn.Module):
 		self.hidden_size = 2
 		self.seq_length = 4
 
-		self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size,
-		                    num_layers=self.num_layers, batch_first=True)
 
 	def forward(self, image, dense):
 		transformer_embeddings = self.model_1(image)
 		conv_embeddings = self.model_2(image)
 
-		h_0 = Variable(torch.zeros(
-			self.num_layers, dense.size(0), self.hidden_size))
 
-		c_0 = Variable(torch.zeros(
-			self.num_layers, dense.size(0), self.hidden_size))
-		ula, (h_out, _) = self.lstm(dense, (h_0, c_0))
-		h_out = h_out.view(-1, self.hidden_size)
-		features = torch.cat([transformer_embeddings, conv_embeddings, h_out],
+		features = torch.cat([transformer_embeddings, conv_embeddings, dense],
 		                     dim=1)
 		print(features)
 		x = self.dropout(features)
 		output = self.fc(x)
 		return output
-
 
 # # Train and Validation Functions
 
