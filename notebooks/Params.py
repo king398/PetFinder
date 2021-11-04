@@ -125,5 +125,10 @@ class PetNet(nn.Module):
 
 
 model = PetNet()
+print(id(model))
+
 model = model.to(params['device'])
+print(id(model))
+
 summary(model, (3, 384, 384))
+print(id(model))
