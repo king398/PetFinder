@@ -613,11 +613,7 @@ class PetNet(nn.Module):
 			nn.Linear(64, out_features)
 		)
 		self.dropout = nn.Dropout(0.2)
-		self.num_classes = 1
-		self.num_layers = 1
-		self.input_size = 12
-		self.hidden_size = 2
-		self.seq_length = 4
+
 
 	def forward(self, image, dense):
 		transformer_embeddings = self.model_1(image)
