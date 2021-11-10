@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 cv = []
 
-for i in glob.glob(r"D:\Models\SwinEffnet/*.pth"):
+for i in glob.glob(r"D:\Models\*.pth"):
 	i = i.split("_")
 	cv.append(float(i[9]))
 mean = sum(cv) / len(cv)
