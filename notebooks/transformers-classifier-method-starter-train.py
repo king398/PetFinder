@@ -795,10 +795,10 @@ class MADGRAD(torch.optim.Optimizer):
 
 # In[ ]:
 from tqdm import tqdm_notebook
+
 T1 = 100
 T2 = 700
 af = 3
-
 
 
 def alpha_weight(step):
@@ -809,66 +809,47 @@ def alpha_weight(step):
 	else:
 		return ((step - T1) / (T2 - T1)) * af
 
-def train_fn(train_loader, model, criterion, optimizer, epoch, params, pseudo, scheduler=None):
+
+def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler=None):
 	metric_monitor = MetricMonitor()
 	model.train()
 	stream = tqdm(train_loader)
-	for batch_idx, x_unlabeled in tqdm_notebook(enumerate(pseudo)):
+	mixup = False
+	if epoch > 3:
+		mixup = True
+	else:
+		mixup = False
+	for i, (images, dense, target) in enumerate(stream, start=1):
+		if mixup:
+			images, dense, target_a, target_b, lam = mixup_data(images, dense, target.view(-1, 1), params)
+			images = images.to(params['device'], dtype=torch.float)
+			dense = dense.to(params['device'], dtype=torch.float)
+			target_a = target_a.to(params['device'], dtype=torch.float)
+			target_b = target_b.to(params['device'], dtype=torch.float)
+		else:
+			images = images.to(params['device'], non_blocking=True)
+			dense = dense.to(params['device'], non_blocking=True)
+			target = target.to(params['device'], non_blocking=True).float().view(-1, 1)
 
-		x_unlabeled = x_unlabeled.cuda()
-		model.eval()
-		with torch.cuda.amp.autocast():
+		output = model(images, dense)
 
-			output_unlabeled = model(x_unlabeled)
-		pseudo_labeled = output_unlabeled
-		model.train()
+		if mixup:
+			loss = mixup_criterion(criterion, output, target_a, target_b, lam)
+		else:
+			loss = criterion(output, target)
 
-		# Now calculate the unlabeled loss using the pseudo label
-		with torch.cuda.amp.autocast():
-			output = model(x_unlabeled)
-		output = torch.squeeze(output)
-		pseudo_labeled = torch.squeeze(pseudo_labeled)
-		pseudo_labeled = pseudo_labeled.type(torch.FloatTensor)
-		output = output.type(torch.FloatTensor)
-		unlabeled_loss = alpha_weight(100) * criterion(output, pseudo_labeled)
-		if batch_idx % 50:
-			print(unlabeled_loss)
-
-		# Backpropogate
-		optimizer.zero_grad()
-		unlabeled_loss.backward()
+		rmse_score = usr_rmse_score(output, target)
+		metric_monitor.update('Loss', loss.item())
+		metric_monitor.update('RMSE', rmse_score)
+		loss.backward()
 		optimizer.step()
-		if batch_idx % 250 == 0:
-			for i, (images, dense, target) in enumerate(stream, start=1):
-				torch.cuda.empty_cache()
-				if params['mixup']:
-					images, dense, target_a, target_b, lam = mixup_data(images, dense, target.view(-1, 1), params)
-					images = images.to(params['device'], dtype=torch.float)
-					dense = dense.to(params['device'], dtype=torch.float)
-					target_a = target_a.to(params['device'], dtype=torch.float)
-					target_b = target_b.to(params['device'], dtype=torch.float)
-				else:
-					images = images.to(params['device'], non_blocking=True)
-					dense = dense.to(params['device'], non_blocking=True)
-					target = target.to(params['device'], non_blocking=True).float().view(-1, 1)
-				with torch.cuda.amp.autocast():
-					output = model(images)
-					if params['mixup']:
-						loss = mixup_criterion(criterion, output, target_a, target_b, lam)
-					else:
-						loss = criterion(output, target)
 
-				rmse_score = usr_rmse_score(output, target)
-				metric_monitor.update('Loss', loss.item())
-				metric_monitor.update('RMSE', rmse_score)
-				loss.backward()
-				optimizer.step()
+		if scheduler is not None:
+			scheduler.step()
 
-				if scheduler is not None:
-					scheduler.step()
+		optimizer.zero_grad()
+		stream.set_description(f"Epoch: {epoch:02}. Train. {metric_monitor}")
 
-				optimizer.zero_grad()
-				stream.set_description(f"Epoch: {epoch:02}. Train. {metric_monitor}")
 
 # In[ ]:
 
