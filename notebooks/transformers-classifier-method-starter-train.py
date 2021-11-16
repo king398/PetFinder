@@ -271,6 +271,40 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 	return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
+def rand_bbox(size, lam):
+	W = size[2]
+	H = size[3]
+	cut_rat = np.sqrt(1. - lam)
+	cut_w = np.int(W * cut_rat)
+	cut_h = np.int(H * cut_rat)
+
+	# uniform
+	cx = np.random.randint(W)
+	cy = np.random.randint(H)
+
+	bbx1 = np.clip(cx - cut_w // 2, 0, W)
+	bby1 = np.clip(cy - cut_h // 2, 0, H)
+	bbx2 = np.clip(cx + cut_w // 2, 0, W)
+	bby2 = np.clip(cy + cut_h // 2, 0, H)
+	return bbx1, bby1, bbx2, bby2
+
+
+def cutmix(data, target, alpha=params['mixup_alpha']):
+	indices = torch.randperm(data.size(0))
+	shuffled_data = data[indices]
+	shuffled_target = target[indices]
+
+	lam = np.clip(np.random.beta(alpha, alpha), 0.3, 0.4)
+	bbx1, bby1, bbx2, bby2 = rand_bbox(data.size(), lam)
+	new_data = data.clone()
+	new_data[:, :, bby1:bby2, bbx1:bbx2] = data[indices, :, bby1:bby2, bbx1:bbx2]
+	# adjust lambda to exactly match pixel ratio
+	lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (data.size()[-1] * data.size()[-2]))
+	targets = np.stack(target, shuffled_target, lam)
+	print(targets.shape)
+
+	return new_data, torch.tensor(targets)
+
 # ## 3. Valid Augmentations
 
 # In[ ]:
@@ -815,30 +849,36 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 	model.train()
 	stream = tqdm(train_loader)
 	mixup = False
-	if epoch > 3:
+	if_cutmix = True
+	if epoch > 15:
 		mixup = True
 	else:
 		mixup = False
-	for i, (images, dense, target) in enumerate(stream, start=1):
+	for i, (images, dense, targets) in enumerate(stream, start=1):
 		if mixup:
-			images, dense, target_a, target_b, lam = mixup_data(images, dense, target.view(-1, 1), params)
+			images, dense, targets_a, targets_b, lam = mixup_data(images, dense, targets.view(-1, 1), params)
 			images = images.to(params['device'], dtype=torch.float)
 			dense = dense.to(params['device'], dtype=torch.float)
-			target_a = target_a.to(params['device'], dtype=torch.float)
-			target_b = target_b.to(params['device'], dtype=torch.float)
+			targets_a = targets_a.to(params['device'], dtype=torch.float)
+			targets_b = targets_b.to(params['device'], dtype=torch.float)
+		if cutmix:
+			images, targets = cutmix(images, targets)
+			images = images.to(params['device'], non_blocking=True)
+			dense = dense.to(params['device'], non_blocking=True)
+			targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
 		else:
 			images = images.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
-			target = target.to(params['device'], non_blocking=True).float().view(-1, 1)
+			targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
 
 		output = model(images, dense)
 
 		if mixup:
-			loss = mixup_criterion(criterion, output, target_a, target_b, lam)
+			loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
 		else:
-			loss = criterion(output, target)
+			loss = criterion(output, targets)
 
-		rmse_score = usr_rmse_score(output, target)
+		rmse_score = usr_rmse_score(output, targets)
 		metric_monitor.update('Loss', loss.item())
 		metric_monitor.update('RMSE', rmse_score)
 		loss.backward()
