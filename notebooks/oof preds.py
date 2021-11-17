@@ -1,5 +1,6 @@
 # Asthetics
 import warnings
+
 import sklearn.exceptions
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -8,7 +9,6 @@ warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWar
 
 # General
 from tqdm.auto import tqdm
-from collections import defaultdict
 import pandas as pd
 import numpy as np
 import os
@@ -16,13 +16,11 @@ import random
 import gc
 import cv2
 import glob
-from sklearn.metrics import mean_squared_error
 
 gc.enable()
 pd.set_option('display.max_columns', None)
 
 # Visialisation
-import matplotlib.pyplot as plt
 
 # Image Aug
 import albumentations
@@ -30,14 +28,9 @@ from albumentations.pytorch.transforms import ToTensorV2
 
 # Deep Learning
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, CosineAnnealingLR
 import torch
-import torchvision
 import timm
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.autograd import Variable
 
 # Metrics
 from sklearn.metrics import mean_squared_error
@@ -218,5 +211,8 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 				preds.append(i)
 				true.append(x * 100)
 
-
 print(mean_squared_error(true, preds, squared=False))
+oof_csv = {"true": true, "pred": preds}
+
+oof = pd.DataFrame.from_dict(oof_csv)
+oof.to_csv(r"F:\Pycharm_projects\PetFinder\oof files/swin_large_patch4_window12_384_in22k_oof.csv", index=False)
