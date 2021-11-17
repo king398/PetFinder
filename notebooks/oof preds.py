@@ -16,6 +16,7 @@ import random
 import gc
 import cv2
 import glob
+import ttach as tta
 
 gc.enable()
 pd.set_option('display.max_columns', None)
@@ -186,6 +187,7 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 	model = PetNet()
 	model.load_state_dict(torch.load(i))
 	model.to(params["device"])
+	model = tta.ClassificationTTAWrapper(model, tta.aliases.flip_transform())
 
 	model.eval()
 	X_valid = valid['image_path']
