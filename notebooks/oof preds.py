@@ -141,7 +141,7 @@ class CuteDataset(Dataset):
 
 		dense = self.dense_features[idx, :]
 		label = torch.tensor(self.targets[idx]).float()
-		return image, dense, label
+		return image, dense, label, image_filepath
 
 
 class PetNet(nn.Module):
@@ -169,6 +169,8 @@ class PetNet(nn.Module):
 
 preds = []
 true = []
+fold_name = []
+image_file = []
 for i in glob.glob(r"D:\Models/" + "*.pth"):
 	fold = i.split('_')
 	fold = fold[8]
@@ -200,7 +202,7 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 		num_workers=params['num_workers'], pin_memory=True
 	)
 	with torch.no_grad():
-		for (images, dense, target) in tqdm(val_loader, desc=f'Predicting. '):
+		for (images, dense, target, image_filepath) in tqdm(val_loader, desc=f'Predicting. '):
 			images = images.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
 			with torch.cuda.amp.autocast():
@@ -209,12 +211,14 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 			predictions = np.squeeze(predictions)
 			predictions = predictions.astype(np.float32)
 			predictions = predictions.tolist()
-			for i, x in zip(predictions, target):
+			for i, x, j in zip(predictions, target, image_filepath):
 				preds.append(i)
 				true.append(x * 100)
+				fold_name.append(fold)
+				image_file.append(str(j))
 
 print(mean_squared_error(true, preds, squared=False))
-oof_csv = {"true": true, "pred": preds}
+oof_csv = {"true": true, "pred": preds, "fold": fold_name, "file_name": image_file}
 
 oof = pd.DataFrame.from_dict(oof_csv)
 oof.to_csv(r"F:\Pycharm_projects\PetFinder\oof files/swin_large_patch4_window12_384_in22k_oof.csv", index=False)
