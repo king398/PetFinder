@@ -175,8 +175,10 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 	fold = list(fold)
 	try:
 		fold = int(fold[1] + fold[2])
+		fold -= 1
 	except:
 		fold = int(fold[1])
+		fold -= 1
 	print(fold)
 	valid = train_df[train_df['kfold'] == fold]
 	model = PetNet()
