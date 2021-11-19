@@ -410,14 +410,18 @@ def get_spm(input, target, model):
 	imgsize = (384, 384)
 	bs = input.size(0)
 	with torch.no_grad():
-		output, fms, _ = model(input)
+		output, fms = model(input)
+		print(fms.shape + "full")
 
-		clsw = model.module.fc
+		clsw = model.fc
 		weight = clsw.weight.data
 		bias = clsw.bias.data
 		weight = weight.view(weight.size(0), weight.size(1), 1, 1)
+
 		fms = F.relu(fms)
+		print("relu")
 		poolfea = F.adaptive_avg_pool2d(fms, (1, 1)).squeeze()
+		print("pool")
 		clslogit = F.softmax(clsw.forward(poolfea))
 		logitlist = []
 		for i in range(bs):
@@ -452,7 +456,9 @@ def snapmix(input, target, model=None):
 	target_b = target.clone()
 
 	if r < 1:
+		print("SPM")
 		wfmaps, _ = get_spm(input, target, model)
+		print("SPM")
 		bs = input.size(0)
 		lam = np.random.beta(5, 5)
 		lam1 = np.random.beta(5, 5)
@@ -667,22 +673,27 @@ class PetNet(nn.Module):
 	             inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
-		n_features = self.model.head.in_features
-		self.model.head = nn.Linear(n_features, 128)
-		self.fc = nn.Sequential(
-			nn.Linear(128, 64),
-			nn.ReLU(),
-			nn.Linear(64, out_features)
-		)
+		model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels, num_classes=0)
+		self.model = nn.Sequential(*model.children())[:-2]
+		self.pool = nn.AdaptiveAvgPool2d((1, 1))
+		self.fc = nn.LazyLinear(out_features)
 		self.dropout = nn.Dropout(0.2)
+		self.Flatten = nn.Flatten()
 
-	def forward(self, image, dense):
+	def forward(self, image):
 		embeddings = self.model(image)
-		x = self.dropout(embeddings)
+		print("error 1 ")
+		x = self.pool(embeddings)
+		print("error 2")
+		x = self.Flatten(x)
+		print("error 3")
+		x = self.dropout(x)
+		print("error 4")
 		x = torch.cat([x], dim=1)
+		print("error 5")
 		output = self.fc(x)
-		return output
+		print("error 6")
+		return output, embeddings
 
 	def get_params(self, param_name):
 		ftlayer_params = list(self.model.parameters())
@@ -704,14 +715,14 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 	stream = tqdm(train_loader)
 	if_mixup = False
 	if_cutmix = True
-	if epoch > 4:
+	if epoch > 40:
 		if_mixup = True
 	else:
 		if_mixup = False
-	if epoch > 8:
-		if_cutmix = True
-		if_mixup = False
+
 	for i, (images, dense, targets) in enumerate(stream, start=1):
+		images = images.to(params['device'], non_blocking=True)
+		targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
 		if if_mixup:
 			images, dense, targets_a, targets_b, lam = mixup_data(images, dense, targets.view(-1, 1), params)
 			images = images.to(params['device'], dtype=torch.float)
@@ -719,23 +730,26 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 			targets_a = targets_a.to(params['device'], dtype=torch.float)
 			targets_b = targets_b.to(params['device'], dtype=torch.float)
 		if if_cutmix:
-			images, targets = cutmix(images, targets)
-			images = images.to(params['device'], non_blocking=True)
-			dense = dense.to(params['device'], non_blocking=True)
-			targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
-		else:
-			images = images.to(params['device'], non_blocking=True)
-			dense = dense.to(params['device'], non_blocking=True)
-			targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
-
-		output = model(images, dense)
+			input, target_a, target_b, lam_a, lam_b = snapmix(images, targets.view(-1, 1), model=model)
+			images = images.to(params['device'], dtype=torch.float)
+			targets_a = target_a.to(params['device'], dtype=torch.float)
+			targets_b = target_b.to(params['device'], dtype=torch.float)
+		output, _ = model(images)
+		print(output.shape)
 
 		if if_mixup:
 			loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
+		if if_cutmix:
+			loss_a = criterion(output, target_a)
+			loss_b = criterion(output, target_b)
+			loss = torch.mean(loss_a * lam_a + loss_b * lam_b)
+			print(loss)
+
 		else:
 			loss = criterion(output, targets)
 
 		rmse_score = usr_rmse_score(output, targets)
+
 		metric_monitor.update('Loss', loss.item())
 		metric_monitor.update('RMSE', rmse_score)
 		loss.backward()
@@ -765,9 +779,8 @@ def validate_fn(val_loader, model, criterion, epoch, params):
 	with torch.no_grad():
 		for i, (images, dense, targets) in enumerate(stream, start=1):
 			images = images.to(params['device'], non_blocking=True)
-			dense = dense.to(params['device'], non_blocking=True)
 			target = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
-			output = model(images, dense)
+			output, _ = model(images)
 			loss = criterion(output, targets)
 
 			rmse_score = usr_rmse_score(output, targets)
