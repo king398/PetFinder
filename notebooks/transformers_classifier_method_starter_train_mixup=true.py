@@ -522,25 +522,38 @@ class PetNet(nn.Module):
 	             inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
-		self.model_2 = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
+		self.model = timm.create_model(model_name, pretrained=pretrained)
 		n_features = self.model.head.in_features
-		self.model.head = nn.Linear(n_features, 128)
-		self.model_2.head = nn.Linear(n_features, 128)
-		self.fc = nn.Sequential(
-			nn.Linear(128 + 128, 64),
-			nn.ReLU(),
-			nn.Linear(64, out_features)
-		)
-		self.dropout = nn.Dropout(params['dropout'])
+		self.model.head = nn.Identity()
 
-	def forward(self, image, image_2, dense):
-		embeddings = self.model(image)
-		embeddings_2 = self.model_2(image_2)
-		x = self.dropout(embeddings)
-		x_1 = self.dropout(embeddings_2)
-		x = torch.cat([x, x_1], dim=1)
-		output = self.fc(x)
+		if True:
+			self.att_layer = nn.Sequential(
+				nn.Linear(n_features, 256),
+				nn.Tanh(),
+				nn.Linear(256, 1),
+			)
+		else:
+			self.att_layer = nn.Linear(n_features, 1)
+
+		self.head = nn.Linear(n_features, out_features)
+
+	def forward(self, x, x_1, dense):
+		l = x.shape[2] // 2
+		h1 = self.model(x[:, :, :l, :l])
+		h2 = self.model(x[:, :, :l, l:])
+		h3 = self.model(x[:, :, l:, :l])
+		h4 = self.model(x[:, :, l:, l:])
+
+		a1 = self.att_layer(h1)
+		a2 = self.att_layer(h2)
+		a3 = self.att_layer(h3)
+		a4 = self.att_layer(h4)
+
+		w = torch.cat([a1, a2, a3, a4], dim=1)
+
+		h = h1 * w[:, 0].unsqueeze(-1) + h2 * w[:, 1].unsqueeze(-1) + h3 * w[:, 2].unsqueeze(-1) + h4 * w[:,
+		                                                                                                3].unsqueeze(-1)
+		output = self.head(h)
 		return output
 
 
