@@ -187,7 +187,6 @@ for i in glob.glob(r"D:\Models/" + "*.pth"):
 	model = PetNet()
 	model.load_state_dict(torch.load(i))
 	model.to(params["device"])
-	model = tta.ClassificationTTAWrapper(model, tta.aliases.flip_transform())
 
 	model.eval()
 	X_valid = valid['image_path']

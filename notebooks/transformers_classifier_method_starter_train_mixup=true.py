@@ -369,7 +369,7 @@ class CuteDataset(Dataset):
 		image_filepath = self.images_filepaths[idx]
 		image = cv2.imread(image_filepath)
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-		if self.transform is not None:
+		if self.transform_2 is not None:
 			image_2 = self.transform_2(image=image)['image']
 
 		if self.transform is not None:
@@ -522,13 +522,21 @@ class PetNet(nn.Module):
 	             inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels, num_classes=0)
-		self.fc = nn.LazyLinear(out_features)
-		self.dropout = nn.Dropout(0.2)
+		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
+		self.model_2 = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels)
+		n_features = self.model.head.in_features
+		self.model.head = nn.Linear(n_features, 128)
+		self.model_2.head = nn.Linear(n_features, 128)
+		self.fc = nn.Sequential(
+			nn.Linear(128 + 128, 64),
+			nn.ReLU(),
+			nn.Linear(64, out_features)
+		)
+		self.dropout = nn.Dropout(params['dropout'])
 
 	def forward(self, image, image_2, dense):
 		embeddings = self.model(image)
-		embeddings_2 = self.model(image_2)
+		embeddings_2 = self.model_2(image_2)
 		x = self.dropout(embeddings)
 		x_1 = self.dropout(embeddings_2)
 		x = torch.cat([x, x_1], dim=1)
