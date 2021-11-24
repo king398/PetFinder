@@ -151,7 +151,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-
+from torch.cuda.amp import autocast
 # Metrics
 from sklearn.metrics import mean_squared_error
 
@@ -271,9 +271,36 @@ def get_train_transforms(DIM=params['im_size']):
 			),
 			albumentations.HorizontalFlip(p=0.5),
 			albumentations.VerticalFlip(p=0.5),
-			albumentations.Rotate(limit=180, p=0.7),
-			albumentations.ShiftScaleRotate(
-				shift_limit=0.1, scale_limit=0.1, rotate_limit=45, p=0.5
+			albumentations.HueSaturationValue(
+				hue_shift_limit=0.2, sat_shift_limit=0.2,
+				val_shift_limit=0.2, p=0.5
+			),
+			albumentations.RandomBrightnessContrast(
+				brightness_limit=(-0.1, 0.1),
+				contrast_limit=(-0.1, 0.1), p=0.5
+			),
+
+			ToTensorV2(p=1.0),
+		]
+	)
+
+
+def get_train_transforms_v2(DIM=params['im_size']):
+	return albumentations.Compose(
+		[
+			albumentations.RandomResizedCrop(DIM, DIM),
+			albumentations.Normalize(
+				mean=[0.485, 0.456, 0.406],
+				std=[0.229, 0.224, 0.225],
+			),
+			albumentations.HorizontalFlip(p=0.5),
+			albumentations.VerticalFlip(p=0.5),
+			albumentations.HueSaturationValue(
+
+			),
+			albumentations.RandomBrightnessContrast(
+				brightness_limit=(-0.1, 0.1),
+				contrast_limit=(-0.1, 0.1), p=0.5
 			),
 
 			ToTensorV2(p=1.0),
@@ -308,187 +335,6 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
 	return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
-def rand_bbox1(size, lamb):
-	""" Generate random bounding box
-	Args:
-		- size: [width, breadth] of the bounding box
-		- lamb: (lambda) cut ratio parameter, sampled from Beta distribution
-	Returns:
-		- Bounding box
-	"""
-	W = size[0]
-	H = size[1]
-	cut_rat = np.sqrt(1. - lamb)
-	cut_w = np.int(W * cut_rat)
-	cut_h = np.int(H * cut_rat)
-
-	# uniform
-	cx = np.random.randint(W)
-	cy = np.random.randint(H)
-
-	bbx1 = np.clip(cx - cut_w // 2, 0, W)
-	bby1 = np.clip(cy - cut_h // 2, 0, H)
-	bbx2 = np.clip(cx + cut_w // 2, 0, W)
-	bby2 = np.clip(cy + cut_h // 2, 0, H)
-
-	return bbx1, bby1, bbx2, bby2
-
-
-def cutmix(image_batch, image_batch_labels, beta=params["mixup_alpha"]):
-	""" Generate a CutMix augmented image from a batch
-	Args:
-		- image_batch: a batch of input images
-		- image_batch_labels: labels corresponding to the image batch
-		- beta: a parameter of Beta distribution.
-	Returns:
-		- CutMix image batch, updated labels
-	"""
-	# generate mixed sample
-	lam = np.random.beta(beta, beta)
-	rand_index = np.random.permutation(len(image_batch))
-	target_a = image_batch_labels
-	target_b = image_batch_labels[rand_index]
-	bbx1, bby1, bbx2, bby2 = rand_bbox1(image_batch[0].shape, lam)
-	image_batch_updated = image_batch.clone()
-	image_batch_updated[:, bbx1:bbx2, bby1:bby2, :] = image_batch[rand_index, bbx1:bbx2, bby1:bby2, :]
-
-	# adjust lambda to exactly match pixel ratio
-	lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (image_batch.shape[1] * image_batch.shape[2]))
-	label = target_a * lam + target_b * (1. - lam)
-
-	return image_batch_updated, label
-
-
-def rand_bbox(size, lam, center=False, attcen=None):
-	if len(size) == 4:
-		W = size[2]
-		H = size[3]
-	elif len(size) == 3:
-		W = size[1]
-		H = size[2]
-	elif len(size) == 2:
-		W = size[0]
-		H = size[1]
-	else:
-		raise Exception
-
-	cut_rat = np.sqrt(1. - lam)
-	cut_w = np.int(W * cut_rat)
-	cut_h = np.int(H * cut_rat)
-
-	if attcen is None:
-		# uniform
-		cx = 0
-		cy = 0
-		if W > 0 and H > 0:
-			cx = np.random.randint(W)
-			cy = np.random.randint(H)
-		if center:
-			cx = int(W / 2)
-			cy = int(H / 2)
-	else:
-		cx = attcen[0]
-		cy = attcen[1]
-
-	bbx1 = np.clip(cx - cut_w // 2, 0, W)
-	bby1 = np.clip(cy - cut_h // 2, 0, H)
-	bbx2 = np.clip(cx + cut_w // 2, 0, W)
-	bby2 = np.clip(cy + cut_h // 2, 0, H)
-
-	return bbx1, bby1, bbx2, bby2
-
-
-def get_bbox(imgsize=(224, 224), beta=1.0):
-	r = np.random.rand(1)
-	lam = np.random.beta(beta, beta)
-	bbx1, bby1, bbx2, bby2 = rand_bbox(imgsize, lam)
-
-	return [bbx1, bby1, bbx2, bby2]
-
-
-def get_spm(input, target, model):
-	imgsize = (384, 384)
-	bs = input.size(0)
-	with torch.no_grad():
-		output, fms = model(input)
-		print(fms.shape + "full")
-
-		clsw = model.fc
-		weight = clsw.weight.data
-		bias = clsw.bias.data
-		weight = weight.view(weight.size(0), weight.size(1), 1, 1)
-
-		fms = F.relu(fms)
-		print("relu")
-		poolfea = F.adaptive_avg_pool2d(fms, (1, 1)).squeeze()
-		print("pool")
-		clslogit = F.softmax(clsw.forward(poolfea))
-		logitlist = []
-		for i in range(bs):
-			logitlist.append(clslogit[i, target[i]])
-		clslogit = torch.stack(logitlist)
-
-		out = F.conv2d(fms, weight, bias=bias)
-
-		outmaps = []
-		for i in range(bs):
-			evimap = out[i, target[i]]
-			outmaps.append(evimap)
-
-		outmaps = torch.stack(outmaps)
-		if imgsize is not None:
-			outmaps = outmaps.view(outmaps.size(0), 1, outmaps.size(1), outmaps.size(2))
-			outmaps = F.interpolate(outmaps, imgsize, mode='bilinear', align_corners=False)
-
-		outmaps = outmaps.squeeze()
-
-		for i in range(bs):
-			outmaps[i] -= outmaps[i].min()
-			outmaps[i] /= outmaps[i].sum()
-
-	return outmaps, clslogit
-
-
-def snapmix(input, target, model=None):
-	r = np.random.rand(1)
-	lam_a = torch.ones(input.size(0))
-	lam_b = 1 - lam_a
-	target_b = target.clone()
-
-	if r < 1:
-		print("SPM")
-		wfmaps, _ = get_spm(input, target, model)
-		print("SPM")
-		bs = input.size(0)
-		lam = np.random.beta(5, 5)
-		lam1 = np.random.beta(5, 5)
-		rand_index = torch.randperm(bs).cuda()
-		wfmaps_b = wfmaps[rand_index, :, :]
-		target_b = target[rand_index]
-
-		same_label = target == target_b
-		bbx1, bby1, bbx2, bby2 = rand_bbox(input.size(), lam)
-		bbx1_1, bby1_1, bbx2_1, bby2_1 = rand_bbox(input.size(), lam1)
-
-		area = (bby2 - bby1) * (bbx2 - bbx1)
-		area1 = (bby2_1 - bby1_1) * (bbx2_1 - bbx1_1)
-
-		if area1 > 0 and area > 0:
-			ncont = input[rand_index, :, bbx1_1:bbx2_1, bby1_1:bby2_1].clone()
-			ncont = F.interpolate(ncont, size=(bbx2 - bbx1, bby2 - bby1), mode='bilinear', align_corners=True)
-			input[:, :, bbx1:bbx2, bby1:bby2] = ncont
-			lam_a = 1 - wfmaps[:, bbx1:bbx2, bby1:bby2].sum(2).sum(1) / (wfmaps.sum(2).sum(1) + 1e-8)
-			lam_b = wfmaps_b[:, bbx1_1:bbx2_1, bby1_1:bby2_1].sum(2).sum(1) / (wfmaps_b.sum(2).sum(1) + 1e-8)
-			tmp = lam_a.clone()
-			lam_a[same_label] += lam_b[same_label]
-			lam_b[same_label] += tmp[same_label]
-			lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (input.size()[-1] * input.size()[-2]))
-			lam_a[torch.isnan(lam_a)] = lam
-			lam_b[torch.isnan(lam_b)] = 1 - lam
-
-	return input, target, target_b, lam_a.cuda(), lam_b.cuda()
-
-
 """## 3. Valid Augmentations"""
 
 
@@ -509,11 +355,12 @@ def get_valid_transforms(DIM=params['im_size']):
 
 
 class CuteDataset(Dataset):
-	def __init__(self, images_filepaths, dense_features, targets, transform=None):
+	def __init__(self, images_filepaths, dense_features, targets, transform=None, transform_2=None):
 		self.images_filepaths = images_filepaths
 		self.dense_features = dense_features
 		self.targets = targets
 		self.transform = transform
+		self.transform_2 = transform_2
 
 	def __len__(self):
 		return len(self.images_filepaths)
@@ -522,13 +369,15 @@ class CuteDataset(Dataset):
 		image_filepath = self.images_filepaths[idx]
 		image = cv2.imread(image_filepath)
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+		if self.transform is not None:
+			image_2 = self.transform_2(image=image)['image']
 
 		if self.transform is not None:
 			image = self.transform(image=image)['image']
 
 		dense = self.dense_features[idx, :]
 		label = torch.tensor(self.targets[idx]).float()
-		return image, dense, label
+		return image, image_2, dense, label
 
 
 class CuteDatasetPseudo(Dataset):
@@ -673,34 +522,18 @@ class PetNet(nn.Module):
 	             inp_channels=params['inp_channels'],
 	             pretrained=params['pretrained'], num_dense=len(params['dense_features'])):
 		super().__init__()
-		model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels, num_classes=0)
-		self.model = nn.Sequential(*model.children())[:-2]
-		self.pool = nn.AdaptiveAvgPool2d((1, 1))
+		self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=inp_channels, num_classes=0)
 		self.fc = nn.LazyLinear(out_features)
 		self.dropout = nn.Dropout(0.2)
-		self.Flatten = nn.Flatten()
 
-	def forward(self, image):
+	def forward(self, image, image_2, dense):
 		embeddings = self.model(image)
-		print("error 1 ")
-		x = self.pool(embeddings)
-		print("error 2")
-		x = self.Flatten(x)
-		print("error 3")
-		x = self.dropout(x)
-		print("error 4")
-		x = torch.cat([x], dim=1)
-		print("error 5")
+		embeddings_2 = self.model(image_2)
+		x = self.dropout(embeddings)
+		x_1 = self.dropout(embeddings_2)
+		x = torch.cat([x, x_1], dim=1)
 		output = self.fc(x)
-		print("error 6")
-		return output, embeddings
-
-	def get_params(self, param_name):
-		ftlayer_params = list(self.model.parameters())
-		ftlayer_params_ids = list(map(id, ftlayer_params))
-		freshlayer_params = filter(lambda p: id(p) not in ftlayer_params_ids, self.parameters())
-
-		return eval(param_name + '_params')
+		return output
 
 
 """# Train and Validation Functions
@@ -714,14 +547,15 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 	model.train()
 	stream = tqdm(train_loader)
 	if_mixup = False
-	if_cutmix = True
+	if_cutmix = False
 	if epoch > 40:
 		if_mixup = True
 	else:
 		if_mixup = False
 
-	for i, (images, dense, targets) in enumerate(stream, start=1):
+	for i, (images, images_2, dense, targets) in enumerate(stream, start=1):
 		images = images.to(params['device'], non_blocking=True)
+		images_2 = images_2.to(params['device'], non_blocking=True)
 		targets = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
 		if if_mixup:
 			images, dense, targets_a, targets_b, lam = mixup_data(images, dense, targets.view(-1, 1), params)
@@ -729,24 +563,16 @@ def train_fn(train_loader, model, criterion, optimizer, epoch, params, scheduler
 			dense = dense.to(params['device'], dtype=torch.float)
 			targets_a = targets_a.to(params['device'], dtype=torch.float)
 			targets_b = targets_b.to(params['device'], dtype=torch.float)
-		if if_cutmix:
-			input, target_a, target_b, lam_a, lam_b = snapmix(images, targets.view(-1, 1), model=model)
-			images = images.to(params['device'], dtype=torch.float)
-			targets_a = target_a.to(params['device'], dtype=torch.float)
-			targets_b = target_b.to(params['device'], dtype=torch.float)
-		output, _ = model(images)
-		print(output.shape)
 
-		if if_mixup:
-			loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
-		if if_cutmix:
-			loss_a = criterion(output, target_a)
-			loss_b = criterion(output, target_b)
-			loss = torch.mean(loss_a * lam_a + loss_b * lam_b)
-			print(loss)
+		with autocast():
+			output = model(images, images_2, dense)
 
-		else:
-			loss = criterion(output, targets)
+			if if_mixup:
+				loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
+
+
+			else:
+				loss = criterion(output, targets)
 
 		rmse_score = usr_rmse_score(output, targets)
 
@@ -777,11 +603,14 @@ def validate_fn(val_loader, model, criterion, epoch, params):
 	final_targets = []
 	final_outputs = []
 	with torch.no_grad():
-		for i, (images, dense, targets) in enumerate(stream, start=1):
+		for i, (images, images_2, dense, targets) in enumerate(stream, start=1):
 			images = images.to(params['device'], non_blocking=True)
 			target = targets.to(params['device'], non_blocking=True).float().view(-1, 1)
-			output, _ = model(images)
-			loss = criterion(output, targets)
+			dense = dense.to(params['device'], non_blocking=True)
+			images_2 = images_2.to(params['device'], non_blocking=True)
+			with autocast():
+				output = model(images, images_2, dense)
+				loss = criterion(output, targets)
 
 			rmse_score = usr_rmse_score(output, targets)
 			metric_monitor.update('Loss', loss.item())
@@ -820,14 +649,17 @@ for fold in TRAIN_FOLDS:
 		images_filepaths=X_train.values,
 		dense_features=X_train_dense.values,
 		targets=y_train.values,
-		transform=get_train_transforms()
+		transform=get_train_transforms(),
+		transform_2=get_train_transforms_v2()
 	)
 
 	valid_dataset = CuteDataset(
 		images_filepaths=X_valid.values,
 		dense_features=X_valid_dense.values,
 		targets=y_valid.values,
-		transform=get_valid_transforms()
+		transform=get_valid_transforms(),
+		transform_2=get_train_transforms()
+
 	)
 
 	# Pytorch Dataloader creation
