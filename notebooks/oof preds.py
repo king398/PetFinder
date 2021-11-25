@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'vit_large_patch16_224_in21k',
+	'model': 'swin_large_patch4_window12_384_in22k',
 	'model_1': 'swin_large_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -88,11 +88,11 @@ params = {
 	                   'Human', 'Occlusion', 'Info', 'Blur'],
 	'pretrained': False,
 	'inp_channels': 3,
-	'im_size': 224,
+	'im_size': 384,
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
-	'batch_size': 28,
+	'batch_size': 16,
 	'num_workers': 0,
 	'epochs': 10,
 	'out_features': 1,
@@ -154,7 +154,7 @@ class PetNet(nn.Module):
 		n_features = self.model.head.in_features
 		self.model.head = nn.Linear(n_features, 128)
 		self.fc = nn.Sequential(
-			nn.Linear(128, 64),
+			nn.Linear(128 + num_dense, 64),
 			nn.ReLU(),
 			nn.Linear(64, out_features)
 		)
@@ -163,7 +163,7 @@ class PetNet(nn.Module):
 	def forward(self, image, dense):
 		embeddings = self.model(image)
 		x = self.dropout(embeddings)
-		x = torch.cat([x], dim=1)
+		x = torch.cat([x, dense], dim=1)
 		output = self.fc(x)
 		return output
 
@@ -172,21 +172,25 @@ preds = []
 true = []
 fold_name = []
 image_file = []
-for i in glob.glob(r"D:\Models\Vit/" + "*.pth"):
-	fold = i.split('_')
-	print(fold)
-	fold = fold[7]
-	fold = list(fold)
-	try:
-		fold = int(fold[1] + fold[2])
-		fold -= 1
-	except:
-		fold = int(fold[1])
-		fold -= 1
-	print(fold)
-	valid = train_df[train_df['kfold'] == fold]
+for p in range(0, 10):
+	for i in glob.glob(r"D:\Models/" + "*.pth"):
+		fold = i.split('_')
+		fold = fold[8]
+		fold = list(fold)
+		try:
+			fold = int(fold[1] + fold[2])
+			fold -= 1
+		except:
+			fold = int(fold[1])
+			fold -= 1
+		if p == fold:
+			print(p)
+			path = i
+	print(path)
+
+	valid = train_df[train_df['kfold'] == p]
 	model = PetNet()
-	model.load_state_dict(torch.load(i))
+	model.load_state_dict(torch.load(path))
 	model.to(params["device"])
 
 	model.eval()
@@ -223,4 +227,4 @@ print(mean_squared_error(true, preds, squared=False))
 oof_csv = {"true": true, "pred": preds, "fold": fold_name, "file_name": image_file}
 
 oof = pd.DataFrame.from_dict(oof_csv)
-oof.to_csv(r"F:\Pycharm_projects\PetFinder\oof files/vit_large_patch16_224_in21k_oof.csv", index=False)
+oof.to_csv(r"F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window12_384_in22k_oof.csv", index=False)
