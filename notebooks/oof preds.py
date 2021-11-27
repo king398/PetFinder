@@ -175,7 +175,7 @@ image_file = []
 for p in range(0, 10):
 	for i in glob.glob(r"D:\Models\SwinBase1k/" + "*.pth"):
 		fold = i.split('_')
-		fold = fold[8]
+		fold = fold[7]
 		fold = list(fold)
 		try:
 			fold = int(fold[1] + fold[2])
