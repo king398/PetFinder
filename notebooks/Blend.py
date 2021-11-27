@@ -1,11 +1,16 @@
 import pandas as pd
 from sklearn.metrics import mean_squared_error
-import matplotlib.pyplot as plt
 import numpy as np
 
 df_swin = pd.read_csv("F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window12_384_in22k_oof.csv")
-df_vit = pd.read_csv(r"F:\Pycharm_projects\PetFinder\oof files\vit_large_patch16_224_in21k_oof.csv")
-#train = df_swin.sample(n=1700, random_state=42).reset_index(drop=True)
-true = df_swin["TRUE"].values
-swin_pred = df_swin["pred"].values
-print(mean_squared_error(true, swin_pred, squared=False))
+scores = []
+for i in range(10):
+	train = df_swin.sample(n=1700).reset_index(drop=True)
+	true = train["true"].values
+	swin_pred = train["pred"].values
+	scores.append(mean_squared_error(true, swin_pred, squared=False))
+print(f"std = {np.std(scores)}")
+print(f"mean ={np.mean(scores)}")
+print(f"best_cv = {min(scores)}")
+print(f"worst_cv = {max(scores)}")
+print(f"difference between worst and best cv {max(scores) - min(scores)}")
