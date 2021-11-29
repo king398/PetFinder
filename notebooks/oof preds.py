@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'swin_base_patch4_window12_384',
+	'model': 'vit_large_patch16_224',
 	'model_1': 'swin_base_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -88,11 +88,11 @@ params = {
 	                   'Human', 'Occlusion', 'Info', 'Blur'],
 	'pretrained': False,
 	'inp_channels': 3,
-	'im_size': 384,
+	'im_size': 224,
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
-	'batch_size': 24,
+	'batch_size': 224,
 	'num_workers': 0,
 	'epochs': 10,
 	'out_features': 1,
@@ -173,9 +173,9 @@ true = []
 fold_name = []
 image_file = []
 for p in range(0, 10):
-	for i in glob.glob(r"D:\Models\SwinBase1k/" + "*.pth"):
+	for i in glob.glob(r"D:\Models\Vit1k/" + "*.pth"):
 		fold = i.split('_')
-		fold = fold[7]
+		fold = fold[6]
 		fold = list(fold)
 		try:
 			fold = int(fold[1] + fold[2])
