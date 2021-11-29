@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 df_swin = pd.read_csv("F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window12_384_in22k_oof.csv")
-df_vit = pd.read_csv(r"F:\Pycharm_projects\PetFinder\oof files\swin_base_patch4_window12_384_in22k_oof.csv")
+df_vit = pd.read_csv(r"F:\Pycharm_projects\PetFinder\oof files\swin_base_patch4_window12_384_oof.csv")
 # train = df_swin.sample(n=1700, random_state=42).reset_index(drop=True)
 true = df_swin["true"].values
 swin_pred = df_swin["pred"].values
@@ -27,4 +27,4 @@ plt.ylabel('Overall Ensemble RSME', size=14)
 plt.xlabel('SVR Weight', size=14)
 plt.show()
 print(mean_squared_error(true, swin_pred * 0.6 + swin_small_pred * 0.4, squared=False))
-print(mean_squared_error(true,  swin_small_pred , squared=False))
+print(mean_squared_error(true, swin_small_pred, squared=False))
