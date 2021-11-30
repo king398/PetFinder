@@ -92,7 +92,7 @@ params = {
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
-	'batch_size': 224,
+	'batch_size': 32,
 	'num_workers': 0,
 	'epochs': 10,
 	'out_features': 1,
