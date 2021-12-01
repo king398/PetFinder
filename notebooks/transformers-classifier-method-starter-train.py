@@ -305,6 +305,7 @@ def cutmix(data, target, alpha=params['mixup_alpha']):
 
 	return new_data, torch.tensor(targets)
 
+
 # ## 3. Valid Augmentations
 
 # In[ ]:
@@ -318,6 +319,8 @@ def get_valid_transforms(DIM=params['im_size']):
 				mean=[0.485, 0.456, 0.406],
 				std=[0.229, 0.224, 0.225],
 			),
+			albumentations.RandomBrightnessContrast(),
+			albumentations.HueSaturationValue(),
 			ToTensorV2(p=1.0)
 		]
 	)
