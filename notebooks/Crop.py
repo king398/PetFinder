@@ -1,9 +1,3 @@
-!pip install -qq ../input/packages/webcolors-1.11.1-py3-none-any.whl
-import sys
-sys.path.append("../input/efficient-det-lib")
-sys.path.append("../input/webcolours")
-import os
-os.makedirs("./crop",exist_ok=True)
 # Author: Zylo117
 
 """
@@ -23,6 +17,7 @@ from efficientdet.utils import BBoxTransform, ClipBoxes
 from utils.utils import preprocess, invert_affine, postprocess, STANDARD_COLORS, standard_to_bgr, get_index_label, \
 	plot_one_box
 from tqdm.notebook import tqdm
+
 compound_coef = 6
 force_input_size = None  # set None to use default size
 img_paths = '../input/petfinder-pawpularity-score/test/*.jpg'
@@ -87,29 +82,26 @@ for img_path in tqdm(glob.glob(img_paths)):
 
 	def display(preds, imgs):
 		for i in range(len(imgs)):
-			if len(preds[i]['rois']) == 0:
-				continue
 
 			imgs[i] = imgs[i].copy()
+			if "cat" not in list(preds[i]['class_ids']) or "dog" not in list(preds[i]['class_ids']):
+				print()
+				path = img_path.split("/")
+				path = "./crop/" + path[4]
+				cv2.imwrite(path, imgs[i])
+			else:
+				for j in range(len(preds[i]['rois'])):
+					x1, y1, x2, y2 = preds[i]['rois'][j].astype(np.int)
+					obj = obj_list[preds[i]['class_ids'][j]]
+					if obj == "cat" or obj == "dog":
+						imms = imgs[i]
+						imms = imms[y1:y2, x1:x2]
 
-			for j in range(len(preds[i]['rois'])):
-				x1, y1, x2, y2 = preds[i]['rois'][j].astype(np.int)
-				obj = obj_list[preds[i]['class_ids'][j]]
-				if obj == "cat" or obj == "dog":
-					imms = imgs[i]
-					imms = imms[y1:y2, x1:x2]
-
-					path = img_path.split("/");print(path)
-					path = "./crop/" + path[4]
-					cv2.imwrite(path, imms);print(path)
-					break
-				else:
-					path = img_path.split("/")
-
-					path = "./crop/" + path[4]
-					
+						path = img_path.split("/")
+						path = "./crop/" + path[4]
+						cv2.imwrite(path, imms)
+						break
 
 
-
-out = invert_affine(framed_metas, out)
+	out = invert_affine(framed_metas, out)
 	display(out, ori_imgs)
