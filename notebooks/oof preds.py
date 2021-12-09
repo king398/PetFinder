@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'swin_large_patch4_window12_384',
+	'model': 'swin_large_patch4_window12_224',
 	'model_1': 'swin_base_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -88,7 +88,7 @@ params = {
 	                   'Human', 'Occlusion', 'Info', 'Blur'],
 	'pretrained': False,
 	'inp_channels': 3,
-	'im_size': 384,
+	'im_size': 224,
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
@@ -111,14 +111,14 @@ params = {
 
 def get_valid_transforms(DIM=params['im_size']):
 	return albumentations.Compose(
-		[
-			albumentations.Resize(DIM, DIM),
-			albumentations.Normalize(
-				mean=[0.485, 0.456, 0.406],
-				std=[0.229, 0.224, 0.225],
-			),
-			ToTensorV2(p=1.0)
-		]
+		[albumentations.HorizontalFlip(p=0.5),
+		 albumentations.Resize(DIM, DIM),
+		 albumentations.Normalize(
+			 mean=[0.485, 0.456, 0.406],
+			 std=[0.229, 0.224, 0.225],
+		 ),
+		 ToTensorV2(p=1.0)
+		 ]
 	)
 
 
@@ -186,7 +186,6 @@ for p in range(0, 10):
 		if p == fold:
 			print(p)
 			path = i
-	print(path)
 
 	valid = train_df[train_df['kfold'] == p]
 	model = PetNet()
@@ -227,4 +226,4 @@ print(mean_squared_error(true, preds, squared=False))
 oof_csv = {"true": true, "pred": preds, "fold": fold_name, "file_name": image_file}
 
 oof = pd.DataFrame.from_dict(oof_csv)
-oof.to_csv(rf"F:\Pycharm_projects\PetFinder\oof files\{params['model']}_oof.csv", index=False)
+oof.to_csv(rf"F:\Pycharm_projects\PetFinder\oof files\{params['model']}_oof_crop.csv", index=False)
