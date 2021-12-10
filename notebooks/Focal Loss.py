@@ -2,10 +2,13 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+import tensorflow as tf
+from tensorflow_addons.losses import SigmoidFocalCrossEntropy
+
 
 class FocalLoss(nn.Module):
 	def __init__(self, alpha=0.25, gamma=2):
-		super.__init__()
+		super().__init__()
 		self.alpha = alpha
 		self.gamma = gamma
 
@@ -24,6 +27,10 @@ class FocalLoss(nn.Module):
 
 
 loss = FocalLoss()
-pred = torch.rand(4)
-true = torch.rand(4)
+pred = torch.tensor([0.332, 0.5, 0.6, 0.6])
+true = torch.tensor([0.3, 0.5, 0.6, 0.6])
 print(loss(pred, true))
+pred_tf = tf.constant([0.332, 0.5, 0.6, 0.6])
+true_tf = tf.constant([0.3, 0.5, 0.6, 0.6])
+fl = SigmoidFocalCrossEntropy()
+print(fl(y_true=true_tf, y_pred=pred_tf))
