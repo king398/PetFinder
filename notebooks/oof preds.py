@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'swin_large_patch4_window12_224',
+	'model': 'swin_large_patch4_window7_224',
 	'model_1': 'swin_base_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -173,7 +173,8 @@ true = []
 fold_name = []
 image_file = []
 for p in range(0, 10):
-	for i in glob.glob(r"D:\Models\SwinLargw224Nonmixp/" + "*.pth"):
+	for i in glob.glob(r'D:\Models\SwinLargw224Nonmixp/' + "*.pth"):
+		print(p)
 		fold = i.split('_')
 		fold = fold[7]
 		fold = list(fold)
@@ -183,9 +184,11 @@ for p in range(0, 10):
 		except:
 			fold = int(fold[1])
 			fold -= 1
+
 		if p == fold:
 			print(p)
 			path = i
+			print(fold)
 
 	valid = train_df[train_df['kfold'] == p]
 	model = PetNet()
