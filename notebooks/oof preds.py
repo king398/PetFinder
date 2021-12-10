@@ -154,7 +154,7 @@ class PetNet(nn.Module):
 		n_features = self.model.head.in_features
 		self.model.head = nn.Linear(n_features, 128)
 		self.fc = nn.Sequential(
-			nn.Linear(128 + 12, 64),
+			nn.Linear(128, 64),
 			nn.ReLU(),
 			nn.Linear(64, out_features)
 		)
@@ -163,7 +163,7 @@ class PetNet(nn.Module):
 	def forward(self, image, dense):
 		embeddings = self.model(image)
 		x = self.dropout(embeddings)
-		x = torch.cat([x, dense], dim=1)
+		x = torch.cat([x], dim=1)
 		output = self.fc(x)
 		return output
 
@@ -186,9 +186,7 @@ for p in range(0, 10):
 			fold -= 1
 
 		if p == fold:
-			print(p)
 			path = i
-			print(fold)
 
 	valid = train_df[train_df['kfold'] == p]
 	model = PetNet()
