@@ -3,16 +3,14 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import numpy as np
 
-df_swin = pd.read_csv("F:\Pycharm_projects\PetFinder\oof files\swin_base_patch4_window12_384_oof.csv")
+df_swin = pd.read_csv("F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window12_384_oof_crop.csv")
 df_vit = pd.read_csv(
-	"F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window7_224_oof.csv")
+	"F:\Pycharm_projects\PetFinder\oof files\swin_large_patch4_window7_224_oof_crop.csv")
 
-df_vit_1k = pd.read_csv(r"F:\Pycharm_projects\PetFinder\oof files\vit_large_patch16_224_oof.csv")
 # train = df_swin.sample(n=1700, random_state=42).reset_index(drop=True)
 true = df_swin["true"].values
 swin_pred = df_swin["pred"].values
 swin_small_pred = df_vit["pred"].values
-vit_pred = df_vit_1k["pred"].values
 score = []
 for ww in np.arange(0, 1.05, 0.05):
 	oof3 = (1 - ww) * swin_pred + ww * swin_small_pred

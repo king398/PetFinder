@@ -174,7 +174,6 @@ fold_name = []
 image_file = []
 for p in range(0, 10):
 	for i in glob.glob(r'D:\Models\SwinLargw224Nonmixp/' + "*.pth"):
-		print(p)
 		fold = i.split('_')
 		fold = fold[7]
 		fold = list(fold)
