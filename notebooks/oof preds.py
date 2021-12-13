@@ -112,6 +112,7 @@ params = {
 def get_valid_transforms(DIM=params['im_size']):
 	return albumentations.Compose(
 		[albumentations.HorizontalFlip(p=0.5),
+		 albumentations.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
 		 albumentations.Resize(DIM, DIM),
 		 albumentations.Normalize(
 			 mean=[0.485, 0.456, 0.406],

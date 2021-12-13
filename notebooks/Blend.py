@@ -29,5 +29,5 @@ plt.title(f'Best Overall CV RSME={np.min(score):.4} with SVR Ensemble Weight={be
 plt.ylabel('Overall Ensemble RSME', size=14)
 plt.xlabel('SVR Weight', size=14)
 plt.show()
-print(mean_squared_error(true, swin_pred * 0.6 + swin_small_pred * 0.4, squared=False))
+print(mean_squared_error(true, swin_pred * 0.5 + swin_small_pred * 0.5, squared=False))
 print(mean_squared_error(true, swin_small_pred, squared=False))
