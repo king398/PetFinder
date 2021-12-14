@@ -59,7 +59,7 @@ else:
 	device = torch.device('cpu')
 
 print(f'Using device: {device}')
-train_dir = r"F:\Pycharm_projects\PetFinder\data\crop"
+train_dir = r"F:\Pycharm_projects\PetFinder\data\train"
 test_dir = r'F:\Pycharm_projects\PetFinder\data\test'
 
 train_file_path = r'F:\Pycharm_projects\PetFinder\data\train_10folds.csv'
@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'swin_large_patch4_window7_224',
+	'model': 'swin_large_patch4_window12_384_in22k',
 	'model_1': 'swin_base_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -88,11 +88,11 @@ params = {
 	                   'Human', 'Occlusion', 'Info', 'Blur'],
 	'pretrained': False,
 	'inp_channels': 3,
-	'im_size': 224,
+	'im_size': 384,
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
-	'batch_size': 32,
+	'batch_size': 16,
 	'num_workers': 0,
 	'epochs': 10,
 	'out_features': 1,
@@ -111,8 +111,7 @@ params = {
 
 def get_valid_transforms(DIM=params['im_size']):
 	return albumentations.Compose(
-		[albumentations.HorizontalFlip(p=0.5),
-		 albumentations.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
+		[
 		 albumentations.Resize(DIM, DIM),
 		 albumentations.Normalize(
 			 mean=[0.485, 0.456, 0.406],
@@ -155,7 +154,7 @@ class PetNet(nn.Module):
 		n_features = self.model.head.in_features
 		self.model.head = nn.Linear(n_features, 128)
 		self.fc = nn.Sequential(
-			nn.Linear(128, 64),
+			nn.Linear(128 + 12, 64),
 			nn.ReLU(),
 			nn.Linear(64, out_features)
 		)
@@ -164,7 +163,7 @@ class PetNet(nn.Module):
 	def forward(self, image, dense):
 		embeddings = self.model(image)
 		x = self.dropout(embeddings)
-		x = torch.cat([x], dim=1)
+		x = torch.cat([x, dense], dim=1)
 		output = self.fc(x)
 		return output
 
@@ -174,9 +173,9 @@ true = []
 fold_name = []
 image_file = []
 for p in range(0, 10):
-	for i in glob.glob(r'D:\Models\SwinLargw224Nonmixp/' + "*.pth"):
+	for i in glob.glob(r'D:\Models/' + "*.pth"):
 		fold = i.split('_')
-		fold = fold[7]
+		fold = fold[8]
 		fold = list(fold)
 		try:
 			fold = int(fold[1] + fold[2])
