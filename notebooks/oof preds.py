@@ -59,7 +59,7 @@ else:
 	device = torch.device('cpu')
 
 print(f'Using device: {device}')
-train_dir = r"F:\Pycharm_projects\PetFinder\data\train"
+train_dir = r"F:\Pycharm_projects\PetFinder\data\crop"
 test_dir = r'F:\Pycharm_projects\PetFinder\data\test'
 
 train_file_path = r'F:\Pycharm_projects\PetFinder\data\train_10folds.csv'
@@ -80,7 +80,7 @@ train_df['image_path'] = train_df['Id'].apply(lambda x: return_filpath(x))
 test_df['image_path'] = test_df['Id'].apply(lambda x: return_filpath(x, folder=test_dir))
 
 params = {
-	'model': 'swin_large_patch4_window12_384_in22k',
+	'model': 'swin_large_patch4_window12_384',
 	'model_1': 'swin_base_patch4_window12_384_in22k',
 	'model_2': 'tf_efficientnetv2_m_in21k',
 	'dense_features': ['Subject Focus', 'Eyes', 'Face', 'Near',
@@ -92,7 +92,7 @@ params = {
 	'device': device,
 	'lr': 1e-5,
 	'weight_decay': 1e-6,
-	'batch_size': 16,
+	'batch_size': 32,
 	'num_workers': 0,
 	'epochs': 10,
 	'out_features': 1,
@@ -195,7 +195,8 @@ class CuteDataset(Dataset):
 
 	def __getitem__(self, idx):
 		image_filepath = self.images_filepaths[idx]
-		image = np.load(image_filepath).astype(np.float32)
+		image = cv2.imread(image_filepath)
+		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 		if self.transform is not None:
 			image1 = self.transform(image=image)['image']
@@ -239,9 +240,9 @@ true = []
 fold_name = []
 image_file = []
 for p in range(0, 10):
-	for i in glob.glob(r'D:\Models/' + "*.pth"):
+	for i in glob.glob(r'D:\Models\SwinLarge384Withcrop/' + "*.pth"):
 		fold = i.split('_')
-		fold = fold[8]
+		fold = fold[7]
 		fold = list(fold)
 		try:
 			fold = int(fold[1] + fold[2])
@@ -286,16 +287,18 @@ for p in range(0, 10):
 			images_shift = images_shift.to(params['device'], non_blocking=True)
 			images_rotate = images_rotate.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
-			predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
-			predictions += torch.sigmoid(model(images_flip, dense)).to('cpu').numpy() * 100
-			predictions += torch.sigmoid(model(images_shift, dense)).to('cpu').numpy() * 100
-			predictions += torch.sigmoid(model(images_rotate, dense)).to('cpu').numpy() * 100
+			with torch.cuda.amp.autocast():
+				predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
+				predictions += torch.sigmoid(model(images_flip, dense)).to('cpu').numpy() * 100
+				predictions += torch.sigmoid(model(images_shift, dense)).to('cpu').numpy() * 100
+				predictions += torch.sigmoid(model(images_rotate, dense)).to('cpu').numpy() * 100
+
 			predictions = predictions / 4
 			target = target.to("cpu").numpy()
 			predictions = np.squeeze(predictions)
 			predictions = predictions.astype(np.float32)
 			predictions = predictions.tolist()
-			for i, x, j in zip(predictions, target):
+			for i, x in zip(predictions, target):
 				preds.append(i)
 				true.append(x * 100)
 				fold_name.append(fold)
