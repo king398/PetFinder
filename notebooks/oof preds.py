@@ -112,6 +112,63 @@ params = {
 def get_valid_transforms(DIM=params['im_size']):
 	return albumentations.Compose(
 		[
+			albumentations.Resize(DIM, DIM),
+			albumentations.Normalize(
+				mean=[0.485, 0.456, 0.406],
+				std=[0.229, 0.224, 0.225],
+			),
+			ToTensorV2(p=1.0)
+		]
+	)
+
+
+def get_test_transforms(DIM=params['im_size']):
+	return albumentations.Compose(
+		[
+			albumentations.Resize(DIM, DIM),
+			albumentations.Normalize(
+				mean=[0.485, 0.456, 0.406],
+				std=[0.229, 0.224, 0.225],
+			),
+			ToTensorV2(p=1.0)
+		]
+	)
+
+
+def get_test_Flip_transforms(DIM=params['im_size']):
+	return albumentations.Compose(
+		[albumentations.HorizontalFlip(p=0.5),
+
+		 albumentations.VerticalFlip(p=0.5),
+		 albumentations.Resize(DIM, DIM),
+		 albumentations.Normalize(
+			 mean=[0.485, 0.456, 0.406],
+			 std=[0.229, 0.224, 0.225],
+		 ),
+		 ToTensorV2(p=1.0)
+		 ]
+	)
+
+
+def get_test_Shift_Scale_transforms(DIM=params['im_size']):
+	return albumentations.Compose(
+		[albumentations.ShiftScaleRotate(
+			shift_limit=0.1, scale_limit=0.1, rotate_limit=45, p=0.5
+		),
+
+			albumentations.Resize(DIM, DIM),
+			albumentations.Normalize(
+				mean=[0.485, 0.456, 0.406],
+				std=[0.229, 0.224, 0.225],
+			),
+			ToTensorV2(p=1.0)
+		]
+	)
+
+
+def get_test_Rotate_transforms(DIM=params['im_size']):
+	return albumentations.Compose(
+		[albumentations.Rotate(limit=180, p=0.7),
 		 albumentations.Resize(DIM, DIM),
 		 albumentations.Normalize(
 			 mean=[0.485, 0.456, 0.406],
@@ -123,26 +180,35 @@ def get_valid_transforms(DIM=params['im_size']):
 
 
 class CuteDataset(Dataset):
-	def __init__(self, images_filepaths, dense_features, targets, transform=None):
+	def __init__(self, images_filepaths, dense_features, targets, transform=None, transform_flip=None,
+	             transform_shiftscale=None, transform_rotate=None):
 		self.images_filepaths = images_filepaths
 		self.dense_features = dense_features
 		self.targets = targets
 		self.transform = transform
+		self.transform_flip = transform_flip
+		self.transform_shiftscale = transform_shiftscale
+		self.transform_rotate = transform_rotate
 
 	def __len__(self):
 		return len(self.images_filepaths)
 
 	def __getitem__(self, idx):
 		image_filepath = self.images_filepaths[idx]
-		image = cv2.imread(image_filepath)
-		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+		image = np.load(image_filepath).astype(np.float32)
 
 		if self.transform is not None:
-			image = self.transform(image=image)['image']
+			image1 = self.transform(image=image)['image']
+		if self.transform_flip is not None:
+			image2 = self.transform_flip(image=image)['image']
+		if self.transform_shiftscale is not None:
+			image3 = self.transform_shiftscale(image=image)['image']
+		if self.transform_shiftscale is not None:
+			image4 = self.transform_rotate(image=image)['image']
 
 		dense = self.dense_features[idx, :]
 		label = torch.tensor(self.targets[idx]).float()
-		return image, dense, label, image_filepath
+		return image1, image2, image3, image4, dense, label
 
 
 class PetNet(nn.Module):
@@ -196,34 +262,46 @@ for p in range(0, 10):
 	X_valid = valid['image_path']
 	X_valid_dense = valid[params['dense_features']]
 	y_valid = valid['Pawpularity'] / 100
-	valid_dataset = CuteDataset(
+	test_dataset = CuteDataset(
 		images_filepaths=X_valid.values,
 		dense_features=X_valid_dense.values,
 		targets=y_valid.values,
-		transform=get_valid_transforms()
+		transform=get_test_transforms(),
+		transform_flip=get_test_Flip_transforms(),
+		transform_shiftscale=get_test_Shift_Scale_transforms(),
+		transform_rotate=get_test_Rotate_transforms()
+
 	)
 	val_loader = DataLoader(
-		valid_dataset, batch_size=params['batch_size'], shuffle=False,
-		num_workers=params['num_workers'], pin_memory=True
+		test_dataset, batch_size=params['batch_size'],
+		shuffle=False, num_workers=params['num_workers'],
+		pin_memory=True
 	)
+
 	with torch.no_grad():
-		for (images, dense, target, image_filepath) in tqdm(val_loader, desc=f'Predicting. '):
+		for (images, images_flip, images_shift, images_rotate, dense, target) in tqdm(val_loader,
+		                                                                              desc=f'Predicting. '):
 			images = images.to(params['device'], non_blocking=True)
+			images_flip = images_flip.to(params['device'], non_blocking=True)
+			images_shift = images_shift.to(params['device'], non_blocking=True)
+			images_rotate = images_rotate.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
-			with torch.cuda.amp.autocast():
-				predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
+			predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_flip, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_shift, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_rotate, dense)).to('cpu').numpy() * 100
+			predictions = predictions / 4
 			target = target.to("cpu").numpy()
 			predictions = np.squeeze(predictions)
 			predictions = predictions.astype(np.float32)
 			predictions = predictions.tolist()
-			for i, x, j in zip(predictions, target, image_filepath):
+			for i, x, j in zip(predictions, target):
 				preds.append(i)
 				true.append(x * 100)
 				fold_name.append(fold)
-				image_file.append(str(j))
 
 print(mean_squared_error(true, preds, squared=False))
-oof_csv = {"true": true, "pred": preds, "fold": fold_name, "file_name": image_file}
+oof_csv = {"true": true, "pred": preds, "fold": fold_name}
 
 oof = pd.DataFrame.from_dict(oof_csv)
 oof.to_csv(rf"F:\Pycharm_projects\PetFinder\oof files\{params['model']}_oof_crop.csv", index=False)

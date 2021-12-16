@@ -817,6 +817,7 @@ def validate_fn(val_loader, model, criterion, epoch, params):
 
 best_models_of_each_fold = []
 rmse_tracker = []
+from sklearn.utils import class_weight
 
 for fold in TRAIN_FOLDS:
 	print(''.join(['#'] * 50))
@@ -831,6 +832,11 @@ for fold in TRAIN_FOLDS:
 	X_valid = valid['image_path']
 	X_valid_dense = valid[params['dense_features']]
 	y_valid = valid['Pawpularity'] / 100
+	weights_train = train['Pawpularity'].values
+	class_weights = class_weight.compute_class_weight('balanced',
+	                                                  np.unique(weights_train),
+	                                                  weights_train)
+	class_weights = torch.FloatTensor(class_weights)
 
 	# Pytorch Dataset Creation
 	train_dataset = CuteDataset(
@@ -858,13 +864,12 @@ for fold in TRAIN_FOLDS:
 		valid_dataset, batch_size=params['batch_size'], shuffle=False,
 		num_workers=params['num_workers'], pin_memory=True
 	)
-	pseudo_loader = DataLoader(pseudo_dataset, batch_size=params['batch_size'], shuffle=False,
-	                           num_workers=params['num_workers'], pin_memory=True)
+
 
 	# Model, cost function and optimizer instancing
 	model = PetNet()
 	model = model.to(params['device'])
-	criterion = nn.BCEWithLogitsLoss()
+	criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights)
 	optimizer = torch.optim.AdamW(model.parameters(), lr=params['lr'],
 	                              weight_decay=params['weight_decay'],
 	                              amsgrad=False)
@@ -875,8 +880,8 @@ for fold in TRAIN_FOLDS:
 	best_epoch = np.inf
 	best_model_name = None
 	for epoch in range(1, params['epochs'] + 1):
-		train_fn(train_loader, model, criterion, optimizer, epoch, params, pseudo_loader=pseudo_loader,
-		         scheduler=scheduler)
+		train_fn(train_loader, model, criterion, optimizer, epoch, params,
+		         scheduler)
 		predictions, valid_targets = validate_fn(val_loader, model, criterion, epoch, params)
 		rmse = round(mean_squared_error(valid_targets, predictions, squared=False), 3)
 		if rmse < best_rmse:
