@@ -29,6 +29,3 @@ plt.ylabel('Overall Ensemble RSME', size=14)
 plt.xlabel('SVR Weight', size=14)
 plt.show()
 print(mean_squared_error(true, swin_pred * 1/3 + swin_small_pred * 1/3 + swin_22k_pred * 1/3, squared=False))
-
-print(mean_squared_error(true, swin_small_pred, squared=False))
-print(mean_squared_error(true, swin_pred, squared=False))

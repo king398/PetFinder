@@ -1,30 +1,39 @@
-import hashlib
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import time
-import numpy as np
 
-from matplotlib.pyplot import imread, imshow
-from tqdm import tqdm
 import os
+import glob
+import itertools
+import collections
 
-os.getcwd()
-os.chdir(r'E:\Pseudo Dogs')
-os.getcwd()
-file_list = os.listdir()
-print(len(file_list))
-import hashlib, os
+from PIL import Image
+import cv2
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+import torch
+import imagehash
 
-duplicates = []
-hash_keys = dict()
-for index, filename in tqdm(enumerate(os.listdir('.'))):  # listdir('.') = current directory
-	if os.path.isfile(filename):
-		with open(filename, 'rb') as f:
-			filehash = hashlib.md5(f.read()).hexdigest()
-		if filehash not in hash_keys:
-			hash_keys[filehash] = index
-		else:
-			duplicates.append((index, hash_keys[filehash]))
-print(len(duplicates))
-for index in duplicates:
-	os.remove(file_list[index[0]])
+import matplotlib.pyplot as plt
+
+
+def run():
+
+    funcs = [
+        imagehash.average_hash,
+        imagehash.phash,
+        imagehash.dhash,
+        imagehash.whash,
+    ]
+
+    petids = []
+    hashes = []
+    for path in tqdm(glob.glob('E:\Pseudo Dogs/*.jpg')):
+
+        image = Image.open(path)
+        imageid = path.split('/')[-1].split('.')[0]
+
+        petids.append(imageid)
+        hashes.append(np.array([f(image).hash for f in funcs]).reshape(256))
+
+    return petids, np.array(hashes)
+
+petids, hashes_all = run()
