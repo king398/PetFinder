@@ -301,7 +301,7 @@ for p in range(0, 10):
 			for i, x in zip(predictions, target):
 				preds.append(i)
 				true.append(x * 100)
-				fold_name.append(fold)
+				fold_name.append(p)
 
 print(mean_squared_error(true, preds, squared=False))
 oof_csv = {"true": true, "pred": preds, "fold": fold_name}
