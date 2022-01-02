@@ -287,12 +287,11 @@ for p in range(0, 10):
 			images_shift = images_shift.to(params['device'], non_blocking=True)
 			images_rotate = images_rotate.to(params['device'], non_blocking=True)
 			dense = dense.to(params['device'], non_blocking=True)
-			with torch.cuda.amp.autocast():
-				predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
-				predictions += torch.sigmoid(model(images_flip, dense)).to('cpu').numpy() * 100
-				predictions += torch.sigmoid(model(images_shift, dense)).to('cpu').numpy() * 100
-				predictions += torch.sigmoid(model(images_rotate, dense)).to('cpu').numpy() * 100
 
+			predictions = torch.sigmoid(model(images, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_flip, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_shift, dense)).to('cpu').numpy() * 100
+			predictions += torch.sigmoid(model(images_rotate, dense)).to('cpu').numpy() * 100
 			predictions = predictions / 4
 			target = target.to("cpu").numpy()
 			predictions = np.squeeze(predictions)
