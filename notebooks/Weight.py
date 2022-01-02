@@ -34,4 +34,3 @@ print(f"weighted loss {loss}")  #
 criterion = nn.BCEWithLogitsLoss()
 loss1 = criterion(output, target)
 print(f" non weighted loss {loss1}")
-class
