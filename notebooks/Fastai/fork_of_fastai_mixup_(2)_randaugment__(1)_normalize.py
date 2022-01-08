@@ -16,7 +16,7 @@ from fastai.vision.all import *
 # from fastai.callback.hook import *
 
 set_seed(365, reproducible=True)
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 NEED_TRAIN = True
 
 """clean_dataset_path = Path('../input/petfinder-pawpularity-score-clean/')
@@ -337,12 +337,12 @@ plt.imshow(image)
 plt.show()
 
 
-def get_train_aug(): return albumentations.Compose([albumentations.Resize(384, 384), RandAlbumentaion],
+def get_train_aug(): return albumentations.Compose([albumentations.Resize(224, 224), RandAlbumentaion],
                                                    bbox_params=None, keypoint_params=None, additional_targets=None,
                                                    p=1.0)
 
 
-def get_valid_aug(): return albumentations.Compose([albumentations.Resize(384, 384)], bbox_params=None,
+def get_valid_aug(): return albumentations.Compose([albumentations.Resize(224, 224)], bbox_params=None,
                                                    keypoint_params=None, additional_targets=None, p=1.0)
 
 
@@ -362,7 +362,7 @@ def visualize(image):
 
 def train_aug():
 	return A.Compose([
-		A.Resize(384, 384),
+		A.Resize(224, 224),
 		A.SomeOf([A.RandomContrast((0.6, 0.3)), A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=20),
 		          A.RandomBrightness(limit=[0.6, 0.3]), A.Flip(), A.Rotate(limit=45), A.Equalize(), A.Sharpen(),
 		          A.Solarize(196), A.Posterize(), A.Affine(translate_percent=[0.1, 0.1])], n=3)
@@ -371,7 +371,7 @@ def train_aug():
 
 def valid_aug():
 	return A.Compose([
-		A.Resize(384, 384),
+		A.Resize(224, 224),
 
 	])
 
@@ -433,7 +433,7 @@ def get_data(fold):
 
 	paw_dls = dls.dataloaders(train_df_f,
 	                          bs=BATCH_SIZE,
-	                          num_workers=8,
+	                          num_workers=0,
 	                          seed=seed)
 
 	return paw_dls  # , splitter
@@ -454,7 +454,7 @@ def get_learner(fold_num):
 	data = get_data(fold_num);
 	data.show_batch()
 
-	model = create_model('swin_large_patch4_window12_384', pretrained=True, num_classes=data.c)
+	model = create_model('swin_large_patch4_window7_224', pretrained=True, num_classes=data.c)
 
 	learn = Learner(data, model, loss_func=BCEWithLogitsLossFlat(), metrics=AccumMetric(petfinder_rmse),
 	                cbs=[MixUp(1.0)]).to_fp16()
