@@ -21,3 +21,5 @@ best_w = np.argmin(score) * 0.05
 print(best_w)
 
 print(mean_squared_error(true, swin_pred * 0.5 + swin_small_pred * 0.5, squared=False))
+print(mean_squared_error(true,   swin_small_pred , squared=False))
+print(mean_squared_error(true,   swin_pred , squared=False))
